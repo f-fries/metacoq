@@ -127,7 +127,7 @@ Definition mut_i : mutual_inductive_entry :=
   mind_entry_inds := [one_i; one_i2];
   mind_entry_universes := Monomorphic_entry (LevelSet.empty, ConstraintSet.empty);
   mind_entry_template := false;
-  mind_entry_cumulative := false;
+  mind_entry_variance := None;
   mind_entry_private := None;
 |}.
 
@@ -156,7 +156,7 @@ Definition mut_list_i : mutual_inductive_entry :=
   mind_entry_inds := [one_list_i];
   mind_entry_universes := Monomorphic_entry (LevelSet.empty, ConstraintSet.empty);
   mind_entry_template := false;
-  mind_entry_cumulative := false;
+  mind_entry_variance := None;
   mind_entry_private := None;
 |}.
 
@@ -183,7 +183,7 @@ Definition mut_pt_i : mutual_inductive_entry :=
   mind_entry_inds := [one_pt_i];
   mind_entry_universes := Monomorphic_entry (LevelSet.empty, ConstraintSet.empty);
   mind_entry_template := false;
-  mind_entry_cumulative := false;
+  mind_entry_variance := None;
   mind_entry_private := None;
 |}.
 
