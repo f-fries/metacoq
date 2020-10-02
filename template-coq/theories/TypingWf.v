@@ -650,6 +650,8 @@ Proof.
            eapply Forall_impl; tea. auto.
            destruct indices_matter; [|trivial].
            eapply type_local_ctx_impl; tea. eauto.
+           split. apply ind_sorts. destruct indices_matter; auto.
+           eapply type_local_ctx_impl. eapply ind_sorts. auto.
     -- red in onP. red.
        eapply All_local_env_impl. eauto.
        intros. now apply X.
