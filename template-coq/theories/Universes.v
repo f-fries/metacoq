@@ -200,13 +200,13 @@ End PropLevel.
 
 Module UnivExpr.
   (* npe = no prop expression, +1 if true *)
-  Inductive t_ := npe (e : Level.t * bool).
+  Inductive t_ := npe (e : Level.t * nat).
 
   Definition t := t_.
 
   Global Instance Evaluable : Evaluable t
     := fun v l => match l with
-               | npe (l, b) => (if b then 1 else 0) + val v l
+               | npe (l, n) => Z.of_nat n + val v l
                end.
 
 
@@ -233,18 +233,18 @@ Module UnivExpr.
     end.
 
   Definition make (l : Level.t) : t :=
-    npe ( l, false).
+    npe ( l, 0%nat).
 
-  Definition set : t := npe (Level.lSet, false).
-  Definition type1 : t := npe (Level.lSet, true).
+  Definition set : t := npe (Level.lSet, 0%nat).
+  Definition type1 : t := npe (Level.lSet, 1%nat).
 
   (* Used for (un)quoting. *)
   Definition from_kernel_repr (e : Level.t * bool) : t
-    := npe (e.1, e.2).
+    := npe (e.1, if e.2 then true else false).
 
-  Definition to_kernel_repr (e : t) : Level.t * bool
+  Definition to_kernel_repr (e : t) : Level.t * nat
     := match e with
-       | npe (l, b) => (l, b)
+       | npe (l, b) => (l, match b with 0 => false | _ => true end)
        end.
 
   Definition eq : t -> t -> Prop := eq.
@@ -252,7 +252,7 @@ Module UnivExpr.
   Definition eq_equiv : Equivalence eq := _.
 
   Inductive lt_ : t -> t -> Prop :=
-  | ltUnivExpr1 l : lt_ (npe (l, false)) (npe (l, true))
+  | ltUnivExpr1 l n n' : (n < n')%nat -> lt_ (npe (l, n)) (npe (l, n'))
   | ltUnivExpr2 l l' b b' : Level.lt l l' -> lt_ (npe (l, b)) (npe (l', b')).
 
   Definition lt := lt_.
@@ -260,9 +260,10 @@ Module UnivExpr.
   Global Instance lt_strorder : StrictOrder lt.
   Proof.
     constructor.
-    - intros x X; inversion X.
+    - intros x X; inversion X. subst. lia. subst.
       eapply Level.lt_strorder; eassumption.
     - intros x y z X1 X2; invs X1; invs X2; constructor; tea.
+      etransitivity; tea.
       etransitivity; tea.
   Qed.
 
@@ -274,7 +275,7 @@ Module UnivExpr.
     match x, y with
     | npe (l1, b1), npe (l2, b2) =>
       match Level.compare l1 l2 with
-      | Eq => bool_compare b1 b2
+      | Eq => Nat.compare b1 b2
       | x => x
       end
     end.
@@ -282,9 +283,10 @@ Module UnivExpr.
   Definition compare_spec :
     forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
   Proof.
-    intros [[]] [[]]; cbn; repeat constructor.
+    intros [|[]] [|[]]; cbn; repeat constructor.
     destruct (Level.compare_spec t0 t1); repeat constructor; tas.
-    subst. destruct b, b0; repeat constructor.
+    subst. 
+    destruct (Nat.compare_spec n n0); repeat constructor; tas. congruence.
   Qed.
 
   Definition eq_dec (l1 l2 : t) : {l1 = l2} + {l1 <> l2}.
@@ -440,22 +442,21 @@ Module Universe.
   Definition type0 : t := make Level.lSet.
   Definition type1 : t := lnpe (make' UnivExpr.type1).
 
-
   Definition of_levels (l : PropLevel.t + Level.t) : t :=
     match l with
     | inl PropLevel.lSProp => lSProp
     | inl PropLevel.lProp => lProp
-    | inr l => lnpe (make' (UnivExpr.npe (l, false)))
+    | inr l => lnpe (make' (UnivExpr.npe (l, 0%nat)))
     end.
 
-    (** The universe strictly above FOR TYPING (not cumulativity) *)
+  (** The universe strictly above FOR TYPING (not cumulativity) *)
 
   Definition super (l : PropLevel.t + Level.t) : t :=
     match l with
     | inl PropLevel.lSProp => type1
     | inl PropLevel.lProp => type1
     | inr Level.lSet => type1
-    | inr l => lnpe (make' (UnivExpr.npe (l, true)))
+    | inr l => lnpe (make' (UnivExpr.npe (l, 1%nat)))
     end.
 
   (* Used for quoting. *)
@@ -573,7 +574,7 @@ Module Universe.
 
   Definition try_suc
     := map (fun l => match l with
-                  | UnivExpr.npe (l, _) => UnivExpr.npe (l, true)
+                  | UnivExpr.npe (l, _) => UnivExpr.npe (l, 1%nat)
                   end).
 
     (** The l.u.b. of 2 non-prop universes *)
@@ -625,7 +626,7 @@ Module Universe.
     | lSProp => None
     | lProp => None
     | lnpe l => match UnivExprSet.elements l with
-                 [UnivExpr.npe (l, false)] => Some l
+                 [UnivExpr.npe (l, 0%nat)] => Some l
                | _ => None
                end
     end.

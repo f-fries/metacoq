@@ -211,8 +211,14 @@ Module EnvTyping (T : Term) (E : EnvironmentSig T).
     fun Σ Γ t T =>
       match T with
       | Some T => P Σ Γ t T
-      | None => { s : Universe.t & P Σ Γ t (tSort s) }
+      | None => ((isWfArity_gen P Σ Γ t) + { s : Universe.t & P Σ Γ t (tSort s) })%type
       end.
+
+  Lemma lift_typing_noar_lift_typing (P : global_env_ext -> context -> term -> term -> Type)
+    Σ Γ T U : lift_typing_noar P Σ Γ T U -> lift_typing P Σ Γ T U.
+  Proof.
+    destruct U; simpl; intuition.
+  Defined.
 
   Definition on_local_decl (P : context -> term -> option term -> Type) Γ d :=
     match d.(decl_body) with
@@ -220,11 +226,25 @@ Module EnvTyping (T : Term) (E : EnvironmentSig T).
     | None => P Γ d.(decl_type) None
     end.
 
+  Lemma All_local_env_impl (P Q : context -> term -> option term -> Type) l :
+    All_local_env P l ->
+    (forall Γ t T, P Γ t T -> Q Γ t T) ->
+    All_local_env Q l.
+  Proof.
+    induction 1; intros; simpl; econstructor; eauto.
+  Qed.
+
   Section TypeLocalOver.
     Context (typing : forall (Σ : global_env_ext) (Γ : context), term -> term -> Type).
     Context (property : forall (Σ : global_env_ext) (Γ : context),
                 All_local_env (lift_typing typing Σ) Γ ->
                 forall (t T : term), typing Σ Γ t T -> Type).
+
+    Definition lift_property (Σ : global_env_ext) (Γ : context) :
+      All_local_env (lift_typing_noar typing Σ) Γ ->
+      forall (t T : term), typing Σ Γ t T -> Type :=
+      fun a t T HT => property Σ Γ (All_local_env_impl (lift_typing_noar typing Σ) _ _ a
+          (lift_typing_noar_lift_typing typing Σ)) t T HT.
 
     Inductive All_local_env_over (Σ : global_env_ext) :
       forall (Γ : context), All_local_env (lift_typing typing Σ) Γ -> Type :=
@@ -235,7 +255,10 @@ Module EnvTyping (T : Term) (E : EnvironmentSig T).
         (all : All_local_env (lift_typing typing Σ) Γ) :
         All_local_env_over Σ Γ all ->
         forall (tu : lift_typing typing Σ Γ t None),
-          property Σ Γ all _ _ (projT2 tu) ->
+        match tu with
+        | inl isWfA => All_local_env_over Σ _ (isWFA.(wf_arity_prop))
+        
+            property Σ Γ all _ _ (projT2 tu) ->
           All_local_env_over Σ (Γ ,, vass na t)
                              (localenv_cons_abs all tu)
 
@@ -799,14 +822,6 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T)
   Arguments onConstructors {_ P Σ mind mdecl i idecl}.
   Arguments onProjections {_ P Σ mind mdecl i idecl}.
   Arguments ind_sorts {_ P Σ mind mdecl i idecl}.
-
-  Lemma All_local_env_impl (P Q : context -> term -> option term -> Type) l :
-    All_local_env P l ->
-    (forall Γ t T, P Γ t T -> Q Γ t T) ->
-    All_local_env Q l.
-  Proof.
-    induction 1; intros; simpl; econstructor; eauto.
-  Qed.
 
   Lemma All_local_env_skipn P Γ : All_local_env P Γ -> forall n, All_local_env P (skipn n Γ).
   Proof.
