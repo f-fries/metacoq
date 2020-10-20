@@ -383,11 +383,10 @@ Definition init_graph : universes_graph
 Lemma init_graph_invariants : invariants init_graph.
 Proof.
   repeat split; cbn in *.
-  1-2: inversion H.
-  intros e ine. inversion ine.
-  now apply VSet.singleton_spec.
-  apply VSet.singleton_spec in H.
-  rewrite H; constructor.
+  1-2: inversion H. sets.
+  apply VSet.singleton_spec in H. subst.
+  exists (paths_refl _ _). simpl. sq. lia.
+  intros e In. inversion In.
 Defined.
 
 
@@ -609,24 +608,28 @@ Qed.
 Global Instance make_graph_invariants uctx (Hi : global_gc_uctx_invariants uctx)
   : invariants (make_graph uctx).
 Proof.
-  split; [|split;[|split]].
+  split.
   - intros e He. apply make_graph_E in He.
     destruct He as [[l [Hl He]]|[gc [Hgc He]]].
     + subst e. split. rewrite source_edge_of_level. apply Hi.
       rewrite target_edge_of_level; tas.
     + subst e. split. destruct gc; try apply (Hi.p2 _ Hgc). apply Hi.
       destruct gc; try apply (Hi.p2 _ Hgc). apply Hi.
-  - admit.
   - apply Hi.
-  - cbn. intros l Hl. sq. destruct l. constructor.
-    econstructor. 2: constructor.
+  - cbn. intros l Hl. sq. destruct l.
+    exists (paths_refl _ _). sq. simpl. reflexivity.
     assert (He: EdgeSet.In (edge_of_level (Level s)) (wGraph.E (make_graph uctx))). {
       apply make_graph_E. left. exists (Level s). intuition. }
-    eexists; exact He.
-    econstructor. 2: constructor.
+    unshelve eexists _.
+    econstructor. 2: constructor. 
+    eexists; exact He. simpl. sq; lia.
     assert (He: EdgeSet.In (edge_of_level (Var n)) (wGraph.E (make_graph uctx))). {
       apply make_graph_E. left. exists (Var n). intuition. }
-    eexists; exact He.
+    unshelve eexists _.
+    econstructor. 2: constructor. 
+    eexists; exact He. simpl. sq; auto. lia.
+  - cbn; intros. (*  maybe relax to have 0-weight paths to the source *)
+    red in Hi. admit.
 Admitted.
 
 
@@ -683,13 +686,13 @@ Ltac simplify_sets :=
 
 Definition labelling_of_valuation (v : valuation) : labelling
   := fun x => match x with
-           | lSet => 0%Z
-           | Level.Level l => Zpos (v.(valuation_mono) l)
-           | Level.Var n => Z.of_nat (v.(valuation_poly) n)
+           | lSet => 0
+           | NoPropLevel.Level l => Pos.to_nat (v.(valuation_mono) l)
+           | NoPropLevel.Var n => (v.(valuation_poly) n)
            end.
 
 Definition valuation_of_labelling (l : labelling) : valuation
-  := {| valuation_mono := fun s => (l (vtn (Level s)));
+  := {| valuation_mono := fun s => Pos.of_nat (l (vtn (Level s)));
         valuation_poly := fun n => l (vtn (Var n)) |}.
 
 
@@ -705,7 +708,7 @@ Section MakeGraph.
     destruct x; cbnr.
     - intros _. now apply proj1 in Hl; cbn in Hl.
     - intro Hs. apply Nat2Pos.id.
-      assert (HH: EdgeSet.In (lSet, 1, vtn (Level s)) (wGraph.E G)). {
+      assert (HH: EdgeSet.In (lSet, Z.of_nat 1, vtn (Level s)) (wGraph.E G)). {
         subst G. apply make_graph_E. left.
         exists (Level s). intuition. }
       apply (proj2 Hl) in HH; cbn in HH. lia.
@@ -872,11 +875,10 @@ Section CheckLeq.
     exact (val_valuation_of_labelling' L l 0 Hl HL).
   Qed.
 
-
   (** ** Check of leq ** *)
 
   Lemma leq_universe_vertices0 n (l l' : Level.t)
-    : leq_vertices G n l l'
+    : leq_vertices G (Z.of_nat n) l l'
       -> gc_leq_universe_n (Z.of_nat n) uctx.2 (Universe.make l) (Universe.make l').
   Proof.
     intros H v Hv. subst G.
@@ -890,7 +892,7 @@ Section CheckLeq.
   Lemma leq_universe_vertices1 n (l l' : Level.t)
         (Hl : VSet.In l (wGraph.V G)) (Hl' : VSet.In l' (wGraph.V G))
     : gc_leq_universe_n (Z.of_nat n) uctx.2 (Universe.make l) (Universe.make l')
-      -> leq_vertices G n l l'.
+      -> leq_vertices G (Z.of_nat n) l l'.
   Proof.
     subst G. intros H v Hv.
     pose proof (H _ (make_graph_spec' _ Huctx _ Hv)) as HH.
@@ -904,7 +906,7 @@ Section CheckLeq.
   Lemma leq_universe_vertices n (l l' : Level.t)
         (Hl : VSet.In l (wGraph.V G)) (Hl' : VSet.In l' (wGraph.V G))
     : gc_leq_universe_n (Z.of_nat n) uctx.2 (Universe.make l) (Universe.make l')
-      <-> leq_vertices G n l l'.
+      <-> leq_vertices G (Z.of_nat n) l l'.
   Proof.
     split.
     - intros H v Hv. apply leq_universe_vertices1; tas.
