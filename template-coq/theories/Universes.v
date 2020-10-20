@@ -1355,9 +1355,7 @@ Context {cf:checker_flags}.
     forall v, satisfies v φ -> val v u = val v u'.
 
   Definition leq_universe_n n (φ : ConstraintSet.t) u u' :=
-    forall v, satisfies v φ ->
-              ((if Universe.is_prop u || Universe.is_sprop u then 0%Z
-                else Z.of_nat n) + val v u <= val v u')%u.
+    forall v, satisfies v φ -> (n + val v u <= val v u')%u.
 
   Definition leq_universe0 (φ : ConstraintSet.t) u u' :=
     forall v, satisfies v φ -> (val v u <= val v u')%u.
