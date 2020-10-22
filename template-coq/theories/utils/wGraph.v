@@ -1243,6 +1243,21 @@ Module WeightedGraph (V : UsualOrderedType).
       specialize (source_bottom _ ine). simpl. congruence.
     Qed.
     
+    Lemma SimplePaths_In {s x y} (p : SimplePaths s x y)
+    : sweight p <> 0 -> VSet.In x s.
+    Proof.
+      destruct p. simpl. lia.
+      intros _. apply d. left; reflexivity.
+    Qed.
+
+    Lemma SimplePaths_In' {s x y} (p : SimplePaths s x y) (H : VSet.In x (V G)) :
+      VSet.In y (V G).
+    Proof.
+      induction p. simpl; auto.
+      apply IHp. destruct e.
+      now specialize (edges_vertices _ i).
+    Qed.
+
     Lemma lsp_to_s {HG : acyclic_no_loop} {x} (Hx : VSet.In x (V G)) {n}
       : lsp x (s G) = Some n -> n = 0.
     Proof.
@@ -1309,13 +1324,6 @@ Module WeightedGraph (V : UsualOrderedType).
         + destruct (Z_of_to_label_s y) as [yl [eq' [ylpos ->]]]; rewrite ?eq'.
           * apply (edges_vertices _ He).
           * now simpl.
-    Qed.
-
-    Lemma SimplePaths_In {s x y} (p : SimplePaths s x y)
-      : sweight p > 0 -> VSet.In x s.
-    Proof.
-      destruct p. inversion 1.
-      intros _. apply d. left; reflexivity.
     Qed.
 
     Lemma lsp_codistance {HG : acyclic_no_loop} x y z
@@ -1980,6 +1988,7 @@ Module WeightedGraph (V : UsualOrderedType).
       lia.
     Qed.
 
+
     Lemma leq_vertices_caract0 {n x y} (Vy : VSet.In y (V G)) :
       leq_vertices G n x y <-> (Some n <= lsp G x y)%nbar.
     Proof.
@@ -2073,12 +2082,23 @@ Module WeightedGraph (V : UsualOrderedType).
       right; auto.
     Qed.
 
-    Lemma lsp_to_source x z : lsp G x (s G) = Some z -> z = 0.
+    Lemma lsp_to_source {x z} : lsp G x (s G) = Some z -> z = 0.
     Proof.
       intros h.
       destruct (lsp0_spec_eq G z h).
       destruct (Paths_to_source G (to_paths _ x0)). subst.
       now rewrite sweight_weight.
+    Qed.
+
+    Lemma lsp_from_source {x} {n}
+    : lsp G (s G) x = Some n -> 0 <= n.
+    Proof.
+      intros H.
+      assert (VSet.In x (V G)).
+      destruct (lsp0_spec_eq G _ H).
+      apply (SimplePaths_In' G x0). eapply HI.
+      destruct (lsp_s G _ H0) as [n' [lspeq w]].
+      rewrite H in lspeq. congruence.
     Qed.
 
     Lemma leq_vertices_caract {n x y} :
