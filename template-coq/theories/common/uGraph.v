@@ -8,6 +8,10 @@ Arguments Z.add : simpl nomatch.
 Arguments Nat.leb : simpl nomatch.
 Arguments Nat.eqb : simpl nomatch.
 
+Definition Z_of_bool (b : bool) : Z :=
+  if b then 1 else 0.
+Notation "⎩ b ⎭" := (Z_of_bool b).
+
 (** variable levels are levels which are Level or Var *)
 Module VariableLevel.
   Inductive t := Level (_ : string) | Var (_ : nat).
@@ -933,10 +937,6 @@ Section CheckLeq.
     unfold leqb_no_prop_n; now subst G.
   Qed.
   
-  Definition Z_of_bool (b : bool) : Z :=
-    if b then 1 else 0.
-  Notation "⎩ b ⎭" := (Z_of_bool b).
-
   (* this is function [check_smaller_expr] of kernel/uGraph.ml *)
   Definition leqb_expr_n lt (e1 e2 : UnivExpr.t) :=
     match e1, e2 with
@@ -1106,6 +1106,17 @@ Section CheckLeq.
     assert (k <= val v u)%nat. lia.
     destruct (H1 H2) as [e [? ?]]. exists e; split; auto.
     lia.
+  Qed.
+
+  Lemma val_ge_caract' (u : Universe.t0) v k :
+    (forall e, UnivExprSet.In e u -> (Z.of_nat (val v e) <= Z.of_nat k)%Z) <-> (Z.of_nat (val v u) <= Z.of_nat k)%Z.
+  Proof.
+    epose proof (val_ge_caract u v k).
+    intuition auto.
+    apply inj_le, H0.
+    intros e hin. specialize (H e hin). lia.
+    assert (val v u <= k)%nat. lia.
+    specialize (H1 H3 e H2). lia.
   Qed.
 
   Lemma Z_of_nat_bool_to_nat x b : (Z.of_nat x + ⎩ b ⎭)%Z = Z.of_nat (x + if b then 1%nat else 0%nat).
@@ -1403,12 +1414,10 @@ Section CheckLeq.
   (* this is function [real_check_leq] of kernel/uGraph.ml *)
   Definition leqb_universe_n lt (u1 u2 : Universe.t) :=
     match u1 with
-    | Universe.lSProp =>
-      (negb lt && Universe.is_sprop u2) ||
-      (prop_sub_type && implb lt (negb (Universe.is_prop u2 || Universe.is_sprop u2)))
+    | Universe.lSProp => negb lt && Universe.is_sprop u2
     | Universe.lProp =>
-      (negb lt && Universe.is_prop u2) ||
-      (prop_sub_type && (implb lt (negb (Universe.is_prop u2 || Universe.is_sprop u2))))
+      (~~ lt && Universe.is_prop u2) ||
+      (prop_sub_type && ~~ Universe.is_sprop u2 && implb lt (negb (Universe.is_prop u2)))
     | Universe.lnpe l =>
       let '(e1, u1) := Universe.exprs l in
       List.fold_left (fun b e1 => leqb_expr_univ_n ⎩ lt ⎭ e1 u2 && b)
@@ -1447,6 +1456,9 @@ Section CheckLeq.
 
   Require Import ssreflect ssrbool.
 
+  Lemma fold_right_xpred0 {A} (l : list A) : fold_right (fun _ => xpred0) false l = false.
+  Proof. induction l; simpl; auto. Qed.
+
   (* Lemma is_prop_and_is_sprop_val_false {u} :
     ~~ (Universe.is_prop u || Universe.is_sprop u) -> forall v, (0 <= val v u)%Z.
   Proof.
@@ -1458,46 +1470,42 @@ Section CheckLeq.
     : leqb_universe_n lt u1 u2 -> gc_leq_universe_n ⎩ lt ⎭ uctx.2 u1 u2.
   Proof.
     unfold leqb_universe_n, gc_leq_universe_n.
-    destruct u1 eqn:Hu1;cbn;intros H v Hv.
+    move/orP: (trichotomy u1) => [/orP [issp1|isp1]|diff];
+    destruct u1 eqn:Hu1;cbn;intros H v Hv; try discriminate.
+    - move/orP: (trichotomy u2) => [/orP [issp|isp]|].
+      * rewrite issp /= andb_true_r in H.
+        apply is_sprop_val with (v:=v) in issp; rewrite issp; cbn.
+        destruct lt; simpl in *; lled => //; try lia.
+      * destruct u2; try discriminate. simpl.
+        now move/andP: H => [? ?].
+      * rewrite negb_orb; move/andP=> [isp issp].
+        destruct u2; try discriminate. simpl.
+        now rewrite (negbTE issp) andb_false_r in H.
     - move/orP: (trichotomy u2) => [/orP [issp|isp]|].
       * rewrite issp (negbTE (is_sprop_is_prop issp)) andb_false_r /= in H.
         apply is_sprop_val with (v:=v) in issp; rewrite issp; cbn.
         destruct lt; simpl in *; lled => //; try lia.
       * rewrite isp /= andb_true_r in H.
-        pose proof (val_minus_one u2 v); lled; try lia.
-        destruct lt; simpl in * => //. lia.
         destruct lt; simpl in * => //.
-        apply is_prop_val with (v:=v) in isp. rewrite isp. right.
-        lia.
-      * move=> isp. rewrite isp in H.
-        pose proof (is_prop_and_is_sprop_val_false isp v).
-        destruct lt; lled; simpl in *; try lia => //.
-        now idtac. destruct (Universe.is_prop u2) => //.
-    - move/orP: (trichotomy u2) => [/orP [issp|isp]|].
-      * rewrite issp /= andb_true_r in H.
-        apply is_sprop_val with (v:=v) in issp; rewrite issp; cbn.
-        rewrite orb_true_r implybF in H.
-        destruct lt; simpl in *; lled => //; try lia.
-      * rewrite isp (negbTE (is_prop_is_sprop isp)) andb_false_r /= implybF in H => //.
-        destruct lt; simpl in * => //. now rewrite andb_false_r in H.
-        lled => //.
-        apply is_prop_val with (v:=v) in isp. rewrite isp. lia.
-      * move=> isp. rewrite isp in H.
-        pose proof (is_prop_and_is_sprop_val_false isp v).
-        destruct lt; lled; simpl in *; try lia => //.
-        now idtac. destruct (Universe.is_sprop u2) => //.
-        now rewrite orb_true_r in isp.
+        now rewrite andb_false_r in H.
+        apply is_prop_val with (v:=v) in isp. now rewrite isp.
+      * rewrite negb_orb. move/andP => [isp issp].
+        rewrite isp issp (negbTE isp) andb_false_r implybT !andb_true_r /= in H.
+        destruct (⟦ u2 ⟧_v) eqn:vu2.
+        eapply val_is_prop in vu2. now rewrite vu2 in isp.
+        eapply val_is_sprop in vu2. now rewrite vu2 in issp.
+        now rewrite H.
     - unfold val, Universe.Evaluable'.
       destruct (Universe.exprs t0) as [e1 u1'] eqn:Hu1'.
+      subst u1.
       rewrite <- fold_left_rev_right in *; cbn in *.
       induction (List.rev u1'); cbn in *.
-      + apply leqb_expr_univ_n_spec0 in H. specialize (H v Hv); cbn in H.
-        assumption.
-      + set (z := (fold_right (fun e x => Z.max (val v e) x) (val v e1) l)) in *.
+      + apply leqb_expr_univ_n_spec0 in H.
+        specialize (H v Hv); cbn in H. assumption.
+      + set (z := (fold_right (fun e x => Nat.max (val v e) x) (val v e1) l)) in *.
         toProp as [H HH].
         apply leqb_expr_univ_n_spec0 in H. specialize (H v Hv). cbn in H.
-        subst u1.
-        destruct (Z.max_dec (val v a) z) as [ee|ee]; rewrite ee.
+        destruct (Nat.max_dec (val v a) z) as [ee|ee]; rewrite ee.
         * assumption.
         * apply IHl; tas.
   Qed.
@@ -1510,7 +1518,6 @@ Section CheckLeq.
   Proof.
     split; [apply leqb_universe_n_spec0|].
     unfold leqb_universe_n; intro HH.
-
     case_eq (Universe.exprs l1); intros e1 uu1 Huu1.
     rewrite (fold_left_andb_forallb (fun e => _)).
     pose proof (Universe.exprs_spec' l1) as X; rewrite Huu1 in X; cbn in X.
@@ -1520,13 +1527,9 @@ Section CheckLeq.
     specialize (Hu1 _ Hei).
     eapply leqb_expr_univ_n_spec; tas.
     intros v Hv. specialize (HH v Hv).
-    assert (0 <= val v ei)%Z by apply UnivExpr.val_zero.
-    apply lle_le in HH. apply le_lle';cbn;try lia.
-    apply Z.le_add_le_sub_l. apply Z.le_add_le_sub_l in HH.
-    rewrite Z.add_comm in HH. apply switch_minus in HH.
-    eapply (val_ge_caract l1 v (val v l2 - ⎩ lt ⎭)%Z).p2 in HH; tea.
-    apply switch_minus in HH. simpl in *.
-    rewrite Z.add_comm. apply HH.
+    simpl in HH |- *.
+    transitivity (Z.of_nat (val v l1)); eauto.
+    eapply (val_ge_caract' l1 v (val v l1)).p2. lia. auto.
   Qed.
 
   Lemma leqb_universe_n_spec lt (u1 u2 : Universe.t)
@@ -1542,31 +1545,27 @@ Section CheckLeq.
       move/orP: (trichotomy u2) => [/orP [isp|issp]|isp].
       rewrite isp. rewrite (is_sprop_val _ isp v) in H.
       destruct lt; simpl in *; auto; lled; try lia.
-      now rewrite orb_true_r.
-      rewrite orb_false_r.
-      destruct u1; try discriminate.
-      rewrite andb_true_r implybF.
-      assert (0 <= val v t0)%Z by apply val_exprs_zero.
-      lled;auto;cbn in *;lia.
+      destruct u2 => //. simpl in *.
+      destruct lt => //.
+      destruct u2; simpl in * => //.
+      rewrite andb_false_r implybT !andb_true_r /=.
+      destruct prop_sub_type; auto.
     - intros H. unfold gc_leq_universe_n in *;cbn in *.
       unfold is_true; repeat rewrite orb_true_iff;auto.
-      destruct u2;cbn;auto.
-      destruct HC as [v Hv]. specialize (H v Hv).
-      assert (0 <= val v t0)%Z by apply val_exprs_zero.
-      lled;auto;cbn in *;lia.
+      destruct HC as [v Hv]; specialize (H v Hv).
+      destruct u2;cbn;auto => //. simpl in H.
+      now destruct lt.
     - intros.
       destruct HC as [v Hv]. specialize (H v Hv) as HH;cbn in *.
-      assert (0 <= val v t0)%Z by apply val_exprs_zero.
       destruct u2;cbn in *; lled;try lia;
         apply leqb_universe_expr_n_spec;auto.
-Qed.
+  Qed.
 
   Definition check_leqb_universe (u1 u2 : Universe.t) :=
     ~~ check_univs
-    || (prop_sub_type && Universe.is_prop u1)
-    || (prop_sub_type && Universe.is_sprop u1)
+    || (prop_sub_type && Universe.is_prop u1 && ~~ Universe.is_sprop u2)
     || Universe.eqb u1 u2
-    || leqb_universe_n 0 u1 u2.
+    || leqb_universe_n false u1 u2.
 
   Lemma check_leqb_universe_spec (u1 u2 : Universe.t)
         (Hu1  : gc_levels_declared_univ u1)
@@ -1575,25 +1574,21 @@ Qed.
   Proof.
     unfold check_leqb_universe, gc_leq_universe.
     destruct check_univs; split; cbn; trivial; intro H.
-    - toProp H as [H|H]; [|now apply leqb_universe_n_spec0].
-      toProp H as [H|H].
-      + toProp H as [H|H];toProp H as [H1 H2].
-        * intros v Hv. rewrite is_prop_val; tas.
-          apply le_lle; tas.
-          prop_non_prop;apply val_minus_one.
-        * intros v Hv. rewrite is_sprop_val by assumption; tas.
-          apply le_lle; tas.
-          prop_non_prop;apply val_minus_one.
-      + apply eqb_true_iff in H;inversion H; subst.
-        intros v Hv;cbn;prop_non_prop;reflexivity.
-    - apply leqb_universe_n_spec in H; tas. cbn in *. rewrite H.
+    - move/orP: H => [/orP [/andP [/andP [ps isp] issp]|ps]|].
+      destruct u1 => //.
+      apply (leqb_universe_n_spec0 false). simpl.
+      now rewrite ps issp orb_true_r.
+      apply eqb_true_iff in ps. subst.
+      intros v Hv. reflexivity.
+      now apply leqb_universe_n_spec.
+    - apply (leqb_universe_n_spec false) in H; tas. cbn in *. rewrite H.
       now rewrite orb_true_r.
   Qed.
 
   Definition check_eqb_universe (u1 u2 : Universe.t) :=
     ~~ check_univs
     || Universe.eqb u1 u2
-    || (leqb_universe_n 0 u1 u2 && leqb_universe_n 0 u2 u1).
+    || (leqb_universe_n false u1 u2 && leqb_universe_n false u2 u1).
 
   Lemma check_eqb_universe_exprs_spec (l1 l2 : Universe.t0)
         (Hu1  : gc_levels_declared l1)
@@ -1607,10 +1602,11 @@ Qed.
       + toProp H as [H1 H2].
         apply leqb_universe_n_spec0 in H1. apply leqb_universe_n_spec0 in H2.
         intros v Hv. specialize (H1 v Hv); specialize (H2 v Hv).
-        repeat prop_non_prop;lled; try lia.
+        simpl in *. f_equal; lia.
     - toProp; right.
-      toProp; apply leqb_universe_n_spec; tas; intros v Hv; specialize (H v Hv);
-                repeat prop_non_prop;lled; try lia.
+      toProp; apply leqb_universe_n_spec; tas; intros v Hv; specialize (H v Hv).
+      rewrite H. reflexivity.
+      rewrite H. reflexivity.
   Qed.
 
   Lemma check_eqb_universe_refl :
@@ -1765,11 +1761,11 @@ Section CheckLeq2.
     now apply expr_gc_declared_declared.
   Qed.
 
-  Lemma leqb_univ_expr_n_spec' n e1 u
+  Lemma leqb_univ_expr_n_spec' lt e1 u
         (He1 : expr_declared e1)
         (Hu : levels_declared u)
-    : leqb_expr_univ_n G n e1 u
-      <-> leq_universe_n n uctx.2 (Universe.make' e1) u.
+    : leqb_expr_univ_n G ⎩ lt ⎭ e1 u
+      <-> leq_universe_n ⎩ lt ⎭ uctx.2 (Universe.make' e1) u.
   Proof.
     etransitivity.
     apply (leqb_expr_univ_n_spec G uctx' Huctx' HC' HG'); tas.
@@ -1781,26 +1777,20 @@ Section CheckLeq2.
       destruct (gc_of_constraints uctx.2) as [ctrs|].
       reflexivity. contradiction HG.
   Qed.
-
-  (* todo complete *)
+  Require Import ssrbool.
   Lemma check_leqb_universe_spec' u1 u2
     : check_leqb_universe G u1 u2 -> leq_universe uctx.2 u1 u2.
   Proof.
     unfold check_leqb_universe, leq_universe.
     destruct check_univs; cbn; [|trivial].
-    case_eq (prop_sub_type && Universe.is_prop u1). {
-      intros e _ v Hv. toProp e as [Hp Hu1].
-      rewrite (is_prop_val _ Hu1 v). apply le_lle; tas.
-      apply val_minus_one. }
-    intros _.
+    case_eq (prop_sub_type && Universe.is_prop u1 && ~~ Universe.is_sprop u2). {
+      simpl. intros e e' v Hv. toProp e as [Hp Hu1].
+      move/andP: Hp => [ps isp].
+      rewrite (is_prop_val _ isp v).
+      destruct u2 => //. simpl. now rewrite ps. }
+    intros _. simpl.
     case_eq (Universe.eqb u1 u2). {
       intros e _ v Hv. apply eqb_true_iff in e. now destruct e. }
-    intros _; cbn.
-    case_eq (prop_sub_type && Universe.is_sprop u1). {
-      intros e _ v Hv. toProp e as [Hp Hu1].
-      rewrite (is_sprop_val _ Hu1 v). apply le_lle; tas.
-      apply val_minus_one. }
-
     intros _; cbn.
     intro H; unshelve eapply (leqb_universe_n_spec0 G uctx' Huctx' HC' HG'
                                                     _ _ _) in H.
@@ -1809,9 +1799,9 @@ Section CheckLeq2.
     unfold is_graph_of_uctx, gc_of_uctx in HG.
     destruct (gc_of_constraints uctx.2). cbn in *. exact H.
     exact I.
-    Qed.
+  Qed.
 
-  (* todo complete *)
+  
   Lemma check_eqb_universe_spec' u1 u2
     : check_eqb_universe G u1 u2 -> eq_universe uctx.2 u1 u2.
   Proof.
@@ -1831,7 +1821,6 @@ Section CheckLeq2.
       (destruct (gc_of_constraints uctx.2); [cbn in *|contradiction HG]); tas.
   Qed.
 
-  (* todo complete *)
   Lemma check_constraints_spec ctrs
     : check_constraints G ctrs -> valid_constraints uctx.2 ctrs.
   Proof.
@@ -1849,11 +1838,3 @@ Section CheckLeq2.
     now destruct (gc_of_constraints uctx.2).
   Qed.
 End CheckLeq2.
-
-
-
-(* If I would restart: *)
-(*   - maybe use nat everywhere instead of Z and Pos *)
-(*   - maybe not put Prop in UnivExprs but in Universes only -- DONE *)
-(*   - more generally keep the graph closer to the spec (valuation = labelling ?)
-       but the the quoting is more complicated ... *)
