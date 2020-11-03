@@ -1060,22 +1060,21 @@ Definition universe_family (u : Universe.t) :=
 
 
 Module ConstraintType.
-  Inductive t_ : Set := Lt | Le | Eq.
+  Inductive t_ : Set := Le (z : Z) | Eq.
   Definition t := t_.
   Definition eq : t -> t -> Prop := eq.
   Definition eq_equiv : Equivalence eq := _.
 
   Inductive lt_ : t -> t -> Prop :=
-  | LtLe : lt_ Lt Le
-  | LtEq : lt_ Lt Eq
-  | LeEq : lt_ Le Eq.
+  | LeLe n m : (n < m)%Z -> lt_ (Le n) (Le m)
+  | LeEq n : lt_ (Le n) Eq.
   Definition lt := lt_.
 
   Lemma lt_strorder : StrictOrder lt.
   Proof.
     constructor.
-    - intros []; intro X; inversion X.
-    - intros ? ? ? X Y; invs X; invs Y; constructor.
+    - intros []; intro X; inversion X. lia.
+    - intros ? ? ? X Y; invs X; invs Y; constructor. lia.
   Qed.
 
   Lemma lt_compat : Proper (eq ==> eq ==> iff) lt.
@@ -1085,23 +1084,23 @@ Module ConstraintType.
 
   Definition compare (x y : t) : comparison :=
     match x, y with
-    | Lt, Lt => Datatypes.Eq
-    | Lt, _  => Datatypes.Lt
-    | Le, Lt => Datatypes.Gt
-    | Le, Le => Datatypes.Eq
-    | Le, Eq => Datatypes.Lt
+    | Le n, Le m => Z.compare n m
+    | Le _, Eq => Datatypes.Lt
     | Eq, Eq => Datatypes.Eq
     | Eq, _  => Datatypes.Gt
     end.
 
   Lemma compare_spec x y : CompareSpec (eq x y) (lt x y) (lt y x) (compare x y).
   Proof.
-    destruct x, y; repeat constructor.
+    destruct x, y; repeat constructor. simpl.
+    destruct (Z.compare_spec z z0); simpl; constructor.
+    subst; constructor. now constructor. now constructor.
   Qed.
 
   Lemma eq_dec x y : {eq x y} + {~ eq x y}.
   Proof.
     unfold eq. decide equality.
+    apply Z.eq_dec.
   Qed.
 End ConstraintType.
 
@@ -1337,10 +1336,8 @@ Section Univ.
 
 
   Inductive satisfies0 (v : valuation) : UnivConstraint.t -> Prop :=
-  | satisfies0_Lt (l l' : Level.t) : (val v l < val v l')
-                         -> satisfies0 v (l, ConstraintType.Lt, l')
-  | satisfies0_Le (l l' : Level.t) : (val v l <= val v l')
-                         -> satisfies0 v (l, ConstraintType.Le, l')
+  | satisfies0_Lt (l l' : Level.t) (z : Z) : (Z.of_nat (val v l) <= Z.of_nat (val v l') - z)%Z
+                         -> satisfies0 v (l, ConstraintType.Le z, l')
   | satisfies0_Eq (l l' : Level.t) : val v l = val v l'
                          -> satisfies0 v (l, ConstraintType.Eq, l').
 
@@ -1809,8 +1806,11 @@ Definition print_lset t :=
 
 Definition print_constraint_type d :=
   match d with
-  | ConstraintType.Lt => "<"
-  | ConstraintType.Le => "<="
+  | ConstraintType.Le n => 
+    if (n =? 0)%Z then "<=" else 
+    if (n =? 1)%Z then "<" else
+    if (n <? 0)%Z then "<=" ^ string_of_nat (Z.to_nat (Z.abs n)) ^ " + "
+    else " + " ^ string_of_nat (Z.to_nat n) ^ " <= "
   | ConstraintType.Eq => "="
   end.
 

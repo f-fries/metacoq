@@ -77,21 +77,23 @@ Coercion VariableLevel.to_noprop : VariableLevel.t >-> Level.t.
 
 Module GoodConstraint.
   Inductive t_ :=
-  (* l <= l' *)
-  | gc_le : VariableLevel.t -> VariableLevel.t -> t_
-  (* l < l' *)
-  | gc_lt : VariableLevel.t -> VariableLevel.t -> t_
-  (* Set < Var n *)
-  | gc_lt_set : nat -> t_
-  (* Set = Var n *)
-  | gc_eq_set : nat -> t_.
+  (* l + z <= l' *)
+  | gc_le : VariableLevel.t -> Z -> VariableLevel.t -> t_
+  (* Set + k < Level n *)
+  | gc_lt_set_level : nat -> string -> t_
+  (* Set + k <= Var n *)
+  | gc_le_set_var : nat -> nat -> t_
+  (* Level n <= Set + k *)
+  | gc_le_level_set : string -> nat -> t_
+  (* Var n <= Set + k *)
+  | gc_le_var_set : nat -> nat -> t_.
   Definition t : Set := t_.
   Definition eq : t -> t -> Prop := Logic.eq.
   Definition eq_equiv : RelationClasses.Equivalence eq := _.
   Definition eq_dec : forall x y : t, {eq x y} + {~ eq x y}.
     unfold eq.
     decide equality. all: try apply VariableLevel.eq_dec.
-    all: apply Peano_dec.eq_nat_dec.
+    apply Z.eq_dec. all:apply string_dec || apply Peano_dec.eq_nat_dec.
   Defined.
 End GoodConstraint.
 Module GoodConstraintSet := Make GoodConstraint.
@@ -112,13 +114,13 @@ Qed.
 
 Import VariableLevel GoodConstraint.
 
-
 Definition gc_satisfies0 v (gc : GoodConstraint.t) : bool :=
   match gc with
-  | gc_le l l' => (val v l <=? val v l')%nat
-  | gc_lt l l' => (val v l <? val v l')%nat
-  | gc_lt_set l => 0 <? v.(valuation_poly) l
-  | gc_eq_set l => 0 =? v.(valuation_poly) l
+  | gc_le l z l' => (Z.of_nat (val v l) <=? Z.of_nat (val v l') - z)%Z
+  | gc_lt_set_level k l => k <? Pos.to_nat (v.(valuation_mono) l)
+  | gc_le_set_var k l => k <=? v.(valuation_poly) l
+  | gc_le_level_set l k => Pos.to_nat (v.(valuation_mono) l) <=? k
+  | gc_le_var_set l k => v.(valuation_poly) l <=? k
   end.
 
 Definition gc_satisfies v : GoodConstraintSet.t -> bool :=
@@ -145,47 +147,72 @@ Definition gc_of_constraint `{checker_flags} (uc : UnivConstraint.t)
      let pair := fun x y => Some (GoodConstraintSet_pair x y) in
      match uc with
      (* Set _ _ *)
-     | (Level.lSet, Le, _) => empty
+     | (Level.lSet, Le z, r) => 
+      match Z.compare z 0 with
+      | Datatypes.Eq => empty
+      | Lt => (* Set <= l + n *) empty
+      | Gt => (* Set + n <= l *) 
+        match r with
+        | Level.lSet => None
+        | Level.Level s => singleton (gc_lt_set_level (Z.to_nat (z - 1)) s)
+        | Level.Var n => singleton (gc_le_set_var (Z.to_nat z) n)
+        end
+      end
      | (Level.lSet, Eq, Level.lSet) => empty
      | (Level.lSet, Eq, Level.Level _) => None
-     | (Level.lSet, Eq, Level.Var n) => singleton (gc_eq_set n)
-     | (Level.lSet, Lt, Level.lSet) => None
-     | (Level.lSet, Lt, Level.Level _) => empty
-     | (Level.lSet, Lt, Level.Var n) => singleton (gc_lt_set n)
+     | (Level.lSet, Eq, Level.Var n) => singleton (gc_le_var_set n 0%nat)
 
      (* Level _ _ *)
-     | (Level.Level _, Le, Level.lSet) => None
-     | (Level.Level l, Le, Level.Level l')
-       => singleton (gc_le (Level l) (Level l'))
-     | (Level.Level l, Le, Level.Var n) => singleton (gc_le (Level l) (Var n))
+     | (Level.Level l, Le z, Level.lSet) => 
+       (* l - n <= Set <-> l <= Set + n *)
+        if (z <=? 0)%Z then singleton (gc_le_level_set l (Z.to_nat (Z.abs z)))
+        else None
+     
+     | (Level.Level l, Le z, Level.Level l')
+       => singleton (gc_le (Level l) z (Level l'))
+     | (Level.Level l, Le z, Level.Var n) => singleton (gc_le (Level l) z (Var n))
      | (Level.Level _, Eq, Level.lSet) => None
      | (Level.Level l, Eq, Level.Level l')
-       => pair (gc_le (Level l) (Level l')) (gc_le (Level l') (Level l))
+       => pair (gc_le (Level l) 0 (Level l')) (gc_le (Level l') 0 (Level l))
      | (Level.Level l, Eq, Level.Var n)
-       => pair (gc_le (Level l) (Var n)) (gc_le (Var n) (Level l))
-     | (Level.Level _, Lt, Level.lSet) => None
-     | (Level.Level l, Lt, Level.Level l')
-       => singleton (gc_lt (Level l) (Level l'))
-     | (Level.Level l, Lt, Level.Var n) => singleton (gc_lt (Level l) (Var n))
+       => pair (gc_le (Level l) 0 (Var n)) (gc_le (Var n) 0 (Level l))
 
      (* Var _ _ *)
-     | (Level.Var n, Le, Level.lSet) => singleton (gc_eq_set n)
-     | (Level.Var n, Le, Level.Level l) => singleton (gc_le (Var n) (Level l))
-     | (Level.Var n, Le, Level.Var n') => singleton (gc_le (Var n) (Var n'))
-     | (Level.Var n, Eq, Level.lSet) => singleton (gc_eq_set n)
+     | (Level.Var n, Le z, Level.lSet) => 
+      (* l - n <= Set <-> l <= Set + n *)
+      if (z <=? 0)%Z then singleton (gc_le_var_set n (Z.to_nat (Z.abs z)))
+      else None
+
+     | (Level.Var n, Le z, Level.Level l) => singleton (gc_le (Var n) z (Level l))
+     | (Level.Var n, Le z, Level.Var n') => singleton (gc_le (Var n) z (Var n'))
+     | (Level.Var n, Eq, Level.lSet) => singleton (gc_le_var_set n 0)
      | (Level.Var n, Eq, Level.Level l)
-       => pair (gc_le (Var n) (Level l)) (gc_le (Level l) (Var n))
+       => pair (gc_le (Var n) 0%Z (Level l)) (gc_le (Level l) 0%Z (Var n))
 
      | (Level.Var n, Eq, Level.Var n')
-       => pair (gc_le (Var n) (Var n')) (gc_le (Var n') (Var n))
-     | (Level.Var _, Lt, Level.lSet) => None
-     | (Level.Var n, Lt, Level.Level l) => singleton (gc_lt (Var n) (Level l))
-     | (Level.Var n, Lt, Level.Var n') => singleton (gc_lt (Var n) (Var n'))
+       => pair (gc_le (Var n) 0 (Var n')) (gc_le (Var n') 0 (Var n))
      end.
 
 Section GC.
 
 Context `{cf : checker_flags}.
+
+Lemma gc_satisfies_singleton v c :
+  gc_satisfies0 v c <->
+  gc_satisfies v (GoodConstraintSet.singleton c).
+Proof.
+  split.
+  - intros H; unfold gc_satisfies.
+    eapply GoodConstraintSet.for_all_spec; auto. proper.
+    intros x xin. eapply GoodConstraintSet.singleton_spec in xin.
+    now subst.
+  - unfold gc_satisfies.
+    intros gc.
+    eapply GoodConstraintSet.for_all_spec in gc; auto. 2:proper.
+    specialize (gc c). 
+    rewrite GoodConstraintSet.singleton_spec in gc.
+    now apply gc.
+Qed.
 
 Lemma gc_of_constraint_spec v uc :
   satisfies0 v uc <-> on_Some (gc_satisfies v) (gc_of_constraint uc).
@@ -195,11 +222,27 @@ Proof.
     all: cbn -[GoodConstraintSet_pair] in *.
     all: lled; cbn -[GoodConstraintSet_pair]; try reflexivity.
     all: rewrite ?if_true_false; repeat toProp ; try lia.
+    all: try solve [destruct (Z.compare_spec z 0); simpl; try constructor; lia].
+    destruct (Z.compare_spec z 0); simpl; try constructor; try lia.
+    apply gc_satisfies_singleton.
+    simpl. apply Nat.ltb_lt. lia.
+    all:try (destruct (Z.compare_spec z 0); simpl; try constructor; try lia;
+    apply gc_satisfies_singleton; simpl; try (apply Nat.ltb_lt||apply Nat.leb_le); lia).
+    all:try (destruct (Z.leb_spec z 0); simpl; try constructor; try lia;
+      apply gc_satisfies_singleton; simpl; apply Nat.leb_le; lia).
     all: apply gc_satisfies_pair; split; cbn; toProp; try lia.
   - destruct uc as [[[] []] []]; intro H; constructor.
     all: cbn -[GoodConstraintSet_pair] in *; try contradiction.
     all: rewrite ?if_true_false in *; lled; cbn -[GoodConstraintSet_pair] in *;
       try contradiction; repeat toProp; try lia.
+    all:try (destruct (Z.compare_spec z 0); simpl in H; auto; try lia;
+      apply gc_satisfies_singleton in H; simpl in H; 
+      (apply Nat.ltb_lt in H || apply Nat.leb_le in H);
+      try lia).
+    all:try (destruct (Z.leb_spec z 0); simpl in H; auto; try lia;
+      apply gc_satisfies_singleton in H; simpl in H; 
+      (apply Nat.ltb_lt in H || apply Nat.leb_le in H);
+      try lia).
     all: apply gc_satisfies_pair in H; destruct H as [H1 H2]; cbn in *;
       repeat toProp; try lia.
 Qed.
@@ -408,11 +451,12 @@ Definition global_uctx_invariants (uctx : ContextSet.t)
 
 Definition global_gc_uctx_invariants (uctx : VSet.t * GoodConstraintSet.t)
   := VSet.In lSet uctx.1 /\ GoodConstraintSet.For_all (fun gc => match gc with
-                 | gc_le l l'
-                 | gc_lt l l'  => VSet.In (vtn l) uctx.1
+                 | gc_le l z l' => VSet.In (vtn l) uctx.1
                                  /\ VSet.In (vtn l') uctx.1
-                 | gc_lt_set n
-                 | gc_eq_set n => VSet.In (Level.Var n) uctx.1
+                 | gc_lt_set_level _ n
+                 | gc_le_level_set n _ => VSet.In (Level.Level n) uctx.1
+                 | gc_le_var_set n _
+                 | gc_le_set_var _ n => VSet.In (Level.Var n) uctx.1
                  end) uctx.2.
 
 Definition gc_of_uctx `{checker_flags} (uctx : ContextSet.t)
@@ -499,7 +543,11 @@ Proof.
     clear -Hi HH.
     destruct e as [[l ct] l']; simpl in Hi.
     destruct l, ct, l'; cbn in HH; destruct prop_sub_type; cbn in HH.
-    all: match goal with
+    all:repeat match goal with
+         | HH : context [ (?z ?= 0)%Z ] |- _ => 
+          destruct (Z.compare_spec z 0); simpl in HH; auto
+          | HH : context [ (?z <=? 0)%Z ] |- _ => 
+          destruct (Z.leb_spec z 0); simpl in HH; auto
          | HH : False |- _ => contradiction HH
          | HH : GoodConstraintSet.In ?A GoodConstraintSet.empty |- _
            => apply GoodConstraintSetFact.empty_iff in HH; contradiction HH
@@ -525,10 +573,11 @@ Definition EdgeSet_triple x y z
 
 Definition edge_of_constraint (gc : GoodConstraint.t) : EdgeSet.elt :=
   match gc with
-  | gc_le l l' => (vtn l, 0%Z, vtn l')
-  | gc_lt l l' => (vtn l, 1%Z, vtn l')
-  | gc_lt_set n => (lSet, 1%Z, vtn (Var n))
-  | gc_eq_set n => (vtn (Var n), 0%Z, lSet)
+  | gc_le l z l' => (vtn l, z, vtn l')
+  | gc_lt_set_level k s => (lSet, Z.of_nat (S k), vtn (Level s)) 
+  | gc_le_set_var k n => (lSet, Z.of_nat k, vtn (Var n))
+  | gc_le_level_set s k => (vtn (Level s), (- Z.of_nat k)%Z, lSet)
+  | gc_le_var_set n k => (vtn (Var n), (- Z.of_nat k)%Z, lSet)
   end.
 
 
@@ -616,7 +665,9 @@ Proof.
     + subst e. split. rewrite source_edge_of_level. apply Hi.
       rewrite target_edge_of_level; tas.
     + subst e. split. destruct gc; try apply (Hi.p2 _ Hgc). apply Hi.
+      simpl. apply Hi.
       destruct gc; try apply (Hi.p2 _ Hgc). apply Hi.
+      simpl. apply Hi.
   - apply Hi.
   - cbn. intros l Hl. sq. destruct l.
     exists (paths_refl _ _). sq. simpl. reflexivity.
@@ -630,7 +681,7 @@ Proof.
     unshelve eexists _.
     econstructor. 2: constructor. 
     eexists; exact He. simpl. sq; auto. lia.
-  - cbn; intros. (*  maybe relax to have 0-weight paths to the source *)
+  - cbn; intros. (* TODO relax to have <= 0-weight paths to the source *)
     red in Hi. admit.
 Admitted.
 
@@ -729,14 +780,15 @@ Section MakeGraph.
         apply GoodConstraintSet.for_all_spec in H.
         2: intros x y []; reflexivity.
         specialize (H _ Hc). cbn in *.
-        destruct ctr as [[] []|[] []|n|n]; cbn in *; toProp H; try lia.
+        destruct ctr as [[] z []|[] []| |n|n]; cbn in *; toProp H; try lia.
+        all:try destruct t0; cbn in *; try lia.
     - apply GoodConstraintSet.for_all_spec.
       intros x y []; reflexivity.
       intros gc Hgc.
       pose proof (proj2 (make_graph_E uctx (edge_of_constraint gc))
                         (or_intror (ex_intro _ gc (conj Hgc eq_refl)))) as XX.
       specialize (H.p2 _ XX).
-      destruct gc as [[] []|[] []|n|n]; intro HH; cbn in *; toProp; lia.
+      destruct gc as [[] z []|k ?| |n|n]; intro HH; cbn in *; toProp; try lia.
   Qed.
 
   Corollary make_graph_spec' l :
@@ -941,14 +993,8 @@ Section CheckLeq.
   Definition leqb_expr_n lt (e1 e2 : UnivExpr.t) :=
     match e1, e2 with
     | UnivExpr.npe (l1, k), UnivExpr.npe (l2, k') => 
-      (* l1 + k < n = l2 + k' <-> l1 < n + (k - k') = l2 
-        Set <= l1 <= Set + 2
-        l1 - 2 <= Set -> l1 - 2 = Set
-
-        Set <= l1 - 3 impossible ?
-        *)
-      leqb_no_prop_n (lt + (Z.of_nat k - Z.of_nat k')) l1 l2 (*&&
-      (prop_sub_type || (0 <=? lt + (Z.of_nat k - Z.of_nat k'))%Z)*)
+      (* l1 + k < n = l2 + k' <-> l1 < n + (k - k') = l2 *)
+      leqb_no_prop_n (lt + (Z.of_nat k - Z.of_nat k')) l1 l2 
     end.
 
   (* Non trivial lemma *)
@@ -1619,10 +1665,11 @@ Section CheckLeq.
 
   Definition check_gc_constraint (gc : GoodConstraint.t) :=
     negb check_univs || match gc with
-                       | gc_le l l' => leqb_no_prop_n 0 l l'
-                       | gc_lt l l' => leqb_no_prop_n 1 l l'
-                       | gc_lt_set n => leqb_no_prop_n 1 lSet (Var n)
-                       | gc_eq_set n => leqb_no_prop_n 0 (Var n) lSet
+                       | gc_le l z l' => leqb_no_prop_n z l l'
+                       | gc_lt_set_level k l => leqb_no_prop_n (Z.of_nat (S k)) lSet (Level l)
+                       | gc_le_set_var k n => leqb_no_prop_n (Z.of_nat k) lSet (Var n)
+                       | gc_le_level_set l k => leqb_no_prop_n (- Z.of_nat k)%Z (Level l) lSet
+                       | gc_le_var_set n k => leqb_no_prop_n (- Z.of_nat k)%Z (Var n) lSet
                        end.
 
   Definition check_gc_constraints
@@ -1639,7 +1686,7 @@ Section CheckLeq.
       -> if check_univs then forall v, gc_satisfies v uctx.2 -> gc_satisfies0 v gc else True.
   Proof.
     unfold check_gc_constraint. destruct check_univs; [cbn|trivial].
-    destruct gc as [l l'|l l'|n|n].
+    destruct gc as [l z l'|k l|k n|l k|n k].
     - intros HH v Hv; apply leqb_no_prop_n_spec0 in HH.
       specialize (HH v Hv). cbn in *. toProp.
       pose proof (val_level_of_variable_level v l).
@@ -1647,9 +1694,10 @@ Section CheckLeq.
       destruct l, l'; cbn in *; lled; lia.
     - intros HH v Hv; apply leqb_no_prop_n_spec0 in HH.
       specialize (HH v Hv). cbn -[Z.of_nat] in HH. unfold gc_satisfies0. toProp.
-      pose proof (val_level_of_variable_level v l) as H1.
-      pose proof (val_level_of_variable_level v l') as H2.
       cbn in *. lled; lia.
+    - intros HH v Hv; apply leqb_no_prop_n_spec0 in HH.
+      specialize (HH v Hv). cbn in HH. unfold gc_satisfies0. toProp.
+      lled; lia.
     - intros HH v Hv; apply leqb_no_prop_n_spec0 in HH.
       specialize (HH v Hv). cbn in HH. unfold gc_satisfies0. toProp.
       lled; lia.
