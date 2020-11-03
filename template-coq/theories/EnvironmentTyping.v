@@ -477,7 +477,7 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T)
       | v :: vs, u :: us, u' :: us' => 
         match v with
         | Variance.Irrelevant => variance_cstrs vs us us'
-        | Variance.Covariant => ConstraintSet.add (u, ConstraintType.Le, u') (variance_cstrs vs us us')
+        | Variance.Covariant => ConstraintSet.add (u, ConstraintType.Le 0, u') (variance_cstrs vs us us')
         | Variance.Invariant => ConstraintSet.add (u, ConstraintType.Eq, u') (variance_cstrs vs us us')
         end
       | _, _, _ => (* Impossible due to on_variance invariant *) ConstraintSet.empty

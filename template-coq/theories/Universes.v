@@ -215,6 +215,11 @@ Module UnivExpr.
                end.
 
 
+  Definition succ (l : t) :=
+    match l with
+    | npe (l, n) => npe (l, S n)
+    end.      
+
   Definition get_level (e : t) : Level.t :=
     match e with
     | npe (l, _) => l
@@ -318,7 +323,6 @@ End UnivExpr.
 Module UnivExprSet := MSetList.MakeWithLeibniz UnivExpr.
 Module UnivExprSetFact := WFactsOn UnivExpr UnivExprSet.
 Module UnivExprSetProp := WPropertiesOn UnivExpr UnivExprSet.
-
 
 Module Universe.
   (** A universe is a list of universe expressions which is:
@@ -451,16 +455,6 @@ Module Universe.
     | inr l => lnpe (make' (UnivExpr.npe (l, 0%nat)))
     end.
 
-  (** The universe strictly above FOR TYPING (not cumulativity) *)
-
-  Definition super (l : PropLevel.t + Level.t) : t :=
-    match l with
-    | inl PropLevel.lSProp => type1
-    | inl PropLevel.lProp => type1
-    | inr Level.lSet => type1
-    | inr l => lnpe (make' (UnivExpr.npe (l, 1%nat)))
-    end.
-
   (* Used for quoting. *)
   Definition from_kernel_repr (e : Level.t * bool) (es : list (Level.t * bool)) : t
     := lnpe (add_list (map UnivExpr.from_kernel_repr es)
@@ -574,9 +568,18 @@ Module Universe.
       + left. exists xx. split; tas; congruence.
   Qed.
 
+  (** The universe strictly above FOR TYPING (not cumulativity) *)
+
+  Definition super (l : t) : t :=
+    match l with
+    | lSProp => type1
+    | lProp => type1
+    | lnpe l => lnpe (map UnivExpr.succ l)
+    end.
+
   Definition try_suc
     := map (fun l => match l with
-                  | UnivExpr.npe (l, _) => UnivExpr.npe (l, 1%nat)
+                  | UnivExpr.npe (l, n) => UnivExpr.npe (l, S n)
                   end).
 
     (** The l.u.b. of 2 non-prop universes *)
@@ -800,8 +803,8 @@ Lemma val_sup v s1 s2 :
 Proof.
   eapply val_caract. cbn. split.
   - intros e' H. eapply UnivExprSet.union_spec in H. destruct H as [H|H].
-    + eapply val_In_le with (v:=v) in H. rewrite H; lia.
-    + eapply val_In_le with (v:=v) in H. rewrite H; lia.
+    + eapply val_In_le with (v:=v) in H. lia.
+    + eapply val_In_le with (v:=v) in H. lia.
   - destruct (Nat.max_dec (val v s1) (val v s2)) as [H|H]; rewrite H; clear H.
     + destruct (val_In_max s1 v) as [e' [H1 H2]].
       exists e'. split; tas. apply UnivExprSet.union_spec. now left.
@@ -1206,7 +1209,8 @@ Module AUContext.
   Definition t := list name × ConstraintSet.t.
 
   Definition make (ids : list name) (ctrs : ConstraintSet.t) : t := (ids, ctrs).
-  Definition repr '((u, cst) : t) : UContext.t :=
+  Definition repr (x : t) : UContext.t :=
+    let (u, cst) := x in
     (mapi (fun i _ => Level.Var i) u, cst).
 
   Definition levels (uctx : t) : LevelSet.t :=
@@ -1948,18 +1952,50 @@ End UniverseLemmas.
 Section no_prop_leq_type.
   Context {cf:checker_flags}.
   Context (ϕ : ConstraintSet.t).
-  (* MS: we need these lemmas on constraints coming from a well-formed environment,
-    maybe that's a necessary additional assumption. *)
 
+  Lemma succ_inj x y : UnivExpr.succ x = UnivExpr.succ y -> x = y.
+  Proof.
+    unfold UnivExpr.succ.
+    destruct x as [[l n]], y as [[l' n']]. congruence.
+  Qed.
 
-  Lemma leq_universe_super l l' :
-    leq_universe ϕ (Universe.of_levels l) (Universe.of_levels l') ->
-    leq_universe ϕ (Universe.super l) (Universe.super l').
+  Lemma spec_map_succ l x : 
+    UnivExprSet.In x (Universe.map UnivExpr.succ l) <-> 
+    exists x', UnivExprSet.In x' l /\ x = UnivExpr.succ x'.
+  Proof.
+    rewrite Universe.map_spec. reflexivity.
+  Qed.
+
+  Lemma val_succ v l : val v (UnivExpr.succ l) = val v l + 1.
+  Proof.
+    destruct l as [[]]; simpl. cbn.
+    lia. 
+  Qed.
+
+  Lemma val_map_succ v l : val v (Universe.map UnivExpr.succ l) = val v l + 1.
+  Proof.
+    remember (Universe.map UnivExpr.succ l) eqn:eq.
+    pose proof (spec_map_succ l). rewrite <- eq in H.
+    clear eq.
+    destruct (val_In_max l v) as [max [inmax eqv]]. rewrite <-eqv.
+    rewrite val_caract. split.
+    intros.
+    specialize (proj1 (H _) H0) as [x' [inx' eq]]. subst e.
+    rewrite val_succ. eapply (val_In_le _ v) in inx'. rewrite <- eqv in inx'.
+    simpl in *. unfold UnivExprSet.elt, UnivExpr.t in *. lia.
+    exists (UnivExpr.succ max). split. apply H.
+    exists max; split; auto.
+    now rewrite val_succ.
+  Qed.
+  
+  Lemma leq_universe_super u u' :
+    leq_universe ϕ u u' ->
+    leq_universe ϕ (Universe.super u) (Universe.super u').
   Proof.
     unfold leq_universe. destruct check_univs; [|trivial].
     intros H v Hv. specialize (H v Hv). simpl in *.
-    destruct l as [l|l], l' as  [l'|l'];
-      destruct l, l';lled; cbn -[Z.add] in *; lia.
+    destruct u as [| |], u' as  [| |]; lled; cbn -[Z.add] in *; try lia;
+    rewrite !val_map_succ; lia.
   Qed.
 
   Lemma leq_universe_prop_sprop u1 u2 :
@@ -2051,7 +2087,7 @@ Section no_prop_leq_type.
   Proof.
     intros Hcf [v Hv] H1 H2. unfold leq_universe in *; rewrite Hcf in *.
     eapply is_prop_val with (v:=v) in H2. specialize (H1 _ Hv).
-    rewrite H2 in H1. destruct l as [l|l];destruct l; lled; cbn -[Z.add] in *; lia.
+    rewrite H2 in H1. destruct l as [| |]; destruct l'; lled; cbn -[Z.add] in *; lia.
   Qed.
 
 End no_prop_leq_type.

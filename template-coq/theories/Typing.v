@@ -769,7 +769,7 @@ Inductive typing `{checker_flags} (Σ : global_env_ext) (Γ : context) : term ->
     (l = inl PropLevel.lSProp \/
     l = inl PropLevel.lProp \/
     (exists l', LevelSet.In l' (global_ext_levels Σ) /\ l = inr l')) ->
-    Σ ;;; Γ |- tSort (Universe.of_levels l) : tSort (Universe.super l)
+    Σ ;;; Γ |- tSort (Universe.of_levels l) : tSort (Universe.super (Universe.of_levels l))
 
 | type_Cast c k t s :
     Σ ;;; Γ |- t : tSort s ->
@@ -1105,7 +1105,7 @@ Lemma typing_ind_env `{cf : checker_flags} :
      l = inl PropLevel.lProp \/
      (exists l', LevelSet.In l' (global_ext_levels Σ) /\ l = inr l')) ->
 
-        P Σ Γ (tSort (Universe.of_levels l)) (tSort (Universe.super l))) ->
+        P Σ Γ (tSort (Universe.of_levels l)) (tSort (Universe.super (Universe.of_levels l)))) ->
 
     (forall Σ (wfΣ : wf Σ.1) (Γ : context) (wfΓ : wf_local Σ Γ) (c : term) (k : cast_kind)
             (t : term) (s : Universe.t),
