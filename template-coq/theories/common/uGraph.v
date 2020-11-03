@@ -685,8 +685,8 @@ Ltac simplify_sets :=
 Definition labelling_of_valuation (v : valuation) : labelling
   := fun x => match x with
            | lSet => 0
-           | NoPropLevel.Level l => Pos.to_nat (v.(valuation_mono) l)
-           | NoPropLevel.Var n => (v.(valuation_poly) n)
+           | Level.Level l => Pos.to_nat (v.(valuation_mono) l)
+           | Level.Var n => (v.(valuation_poly) n)
            end.
 
 Definition valuation_of_labelling (l : labelling) : valuation
@@ -840,14 +840,14 @@ Section CheckLeq.
     destruct l; cbnr. lia.
   Qed.
 
-  Lemma val_labelling_of_valuation' v (l : NoPropLevel.t) n :
+  Lemma val_labelling_of_valuation' v (l : Level.t) n :
     val v (Universe.make' (UnivExpr.npe (l, n)))
     = (Z.of_nat n + Z.of_nat (labelling_of_valuation v l))%Z.
   Proof.
     destruct l; cbnr. lia.
   Qed.
 
-  Lemma val_valuation_of_labelling' L  (l : NoPropLevel.t) n
+  Lemma val_valuation_of_labelling' L  (l : Level.t) n
         (e := UnivExpr.npe (l, n)) :
     gc_level_declared l ->
     correct_labelling G L ->
@@ -875,7 +875,7 @@ Section CheckLeq.
 
   (** ** Check of leq ** *)
 
-  Lemma leq_universe_vertices0 n (l l' : NoPropLevel.t)
+  Lemma leq_universe_vertices0 n (l l' : Level.t)
     : leq_vertices G n l l'
       -> gc_leq_universe_n n uctx.2 (Universe.make l) (Universe.make l').
   Proof.
@@ -940,11 +940,11 @@ Section CheckLeq.
     match e1, e2 with
     | UnivExpr.npe (l1, k), UnivExpr.npe (l2, k') => 
       (* l1 + k < n = l2 + k' <-> l1 < n + (k - k') = l2 *)
-      leqb_no_prop_n (n + (Z.of_nat k - Z.of_nat k')) l1 l2
+      leqb_no_prop_n (lt + (Z.of_nat k - Z.of_nat k')) l1 l2
     end.
 
   (* Non trivial lemma *)
-  Lemma constraint_strengthening (l1 l2 : Level.t) :
+  (*Lemma constraint_strengthening (l1 l2 : Level.t) :
     gc_level_declared l1 -> gc_level_declared l2 ->
     (forall v, gc_satisfies v uctx.2 -> (val v l1 <= 1 + val v l2)%u) ->
     forall v, gc_satisfies v uctx.2 -> (val v l1 <= val v l2)%u.
@@ -1012,28 +1012,15 @@ Section CheckLeq.
 
   Lemma leqb_expr_n_spec0 lt e e'
     : leqb_expr_n lt e e'
-      -> gc_leq_universe_n ⎩ lt ⎭ uctx.2 (Universe.make' e) (Universe.make' e').
+      -> gc_leq_universe_n lt uctx.2 (Universe.of_expr e) (Universe.of_expr e').
   Proof.
     unfold leqb_expr_n.
-    destruct e as [|[l k]], e' as [|[l' k']];
+    destruct e as [[l k]], e' as [[l' k']];
       try solve [try (cbn in *; discriminate);
       intros H v Hv; cbn;
-        (*apply leqb_no_prop_n_spec0 in H;
+        apply leqb_no_prop_n_spec0 in H;
         specialize (H v Hv); cbn in H;
-          try pose proof (Level.val_zero l v);lled;lia.*)
-      try (apply leqb_no_prop_n_spec0 in H; specialize (H v Hv); cbn in H;
-           rewrite ?UnivExpr.val_make_npl in H; try (lled; lia))].
-    - intros H v Hv; cbn.
-      destruct lt; try discriminate. simpl. lled; lia.
-    - intros H v Hv; cbn; destruct lt; simpl.
-      * pose proof (NoPropLevel.val_zero l' v); lled; lia.
-      * pose proof (NoPropLevel.val_zero l' v); lled; lia.
-    - intros [H Hsm]%andP v Hv; cbn.
-      pose proof (NoPropLevel.val_zero l' v).
-      pose proof (NoPropLevel.val_zero l v).
-      apply leqb_no_prop_n_spec0 in H. specialize (H v Hv).
-      cbn in H. rewrite ?UnivExpr.val_make_npl in H.
-      lled; lia.
+          try pose proof (Level.val_zero l v);lled;lia].
   Qed.
 
   Local Ltac tac0 v :=
@@ -1059,36 +1046,27 @@ Section CheckLeq.
   Lemma leqb_expr_n_spec n e e'
         (HHl  : gc_expr_declared e)
         (HHl' : gc_expr_declared e')
-    : leqb_expr_n n e e'
-      <-> gc_leq_universe_n ⎩ n ⎭ uctx.2 (Universe.make' e) (Universe.make' e').
+    : leqb_expr_n ⎩ n ⎭ e e'
+      <-> gc_leq_universe_n ⎩ n ⎭ uctx.2 (Universe.of_expr e) (Universe.of_expr e').
   Proof.
     split; [apply leqb_expr_n_spec0|].
     unfold leqb_expr_n.
-    destruct e as [|[l k]] eqn:eqe, e' as [|[l' k']] eqn:eqe'; cbn; intro H;
+    destruct e as [[l k]] eqn:eqe, e' as [[l' k']] eqn:eqe'; cbn; intro H;
       destruct HC as [v0 Hv0]; pose proof (H v0 Hv0) as H0; cbn in H0.
-    - destruct n; simpl in *. lled; try lia. auto.
-    - destruct k'. simpl in *.
-      destruct n; simpl in *; tac1; lled; try reflexivity; try lia.
-      destruct n; simpl in *; tac1; lled; auto.
-      destruct H0; lia. lia. lia.
-    - destruct n; simpl in *.
-      tac1. lled; lia.
-      tac1. lled; lia.      
-    - simpl in H0 |- *.
-      apply andb_is_true. split.
-      apply leqb_no_prop_n_spec; tas.
-      intros v Hv.
-      pose proof (NoPropLevel.val_zero l v).
-      pose proof (NoPropLevel.val_zero l' v).
-      specialize (H v Hv). simpl in H. cbn in H.
-      rewrite !Universe.val_make_npl.
-      lled; try lia.
-      destruct (Z.leb_spec (Z.of_nat k) (Z.of_nat k')).
-      2:{ destruct H. left. destruct H. split. 2:lia.
-          destruct n; simpl in *. lia. lia. lia. }
-      destruct H as [[]|].
-      left. 2:lia. split. 2:lia.
-       todo String.EmptyString.
+     simpl in H0 |- *.
+    apply leqb_no_prop_n_spec; tas.
+    intros v Hv.
+    pose proof (Level.val_zero l v).
+    pose proof (Level.val_zero l' v).
+    specialize (H v Hv). simpl in H. cbn in H.
+    rewrite !Universe.val_make_npl.
+    lled; try lia.
+    destruct (Z.leb_spec (Z.of_nat k) (Z.of_nat k')).
+    2:{ destruct H. left. destruct H. split. 2:lia.
+        destruct n; simpl in *. lia. lia. lia. }
+    destruct H as [[]|].
+    left. 2:lia. split. 2:lia.
+      todo String.EmptyString.
       destruct l; simpl; auto.
       lled; simpl; auto.
       cbn in H0. todo String.EmptyString.

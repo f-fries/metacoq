@@ -1,6 +1,7 @@
 Require Import ZArith Zcompare Lia ssrbool.
 Require Import MSets.MSetList MSetFacts MSetProperties.
 From MetaCoq.Template Require Import MCUtils.
+Require Import ssreflect.
 
 Local Open Scope Z_scope.
 
@@ -245,7 +246,7 @@ Module Nbar.
   Lemma le_antisymm {n m} : n <= m -> m <= n -> n = m.
   Proof.
     destruct n, m; cbn; try easy.
-    intros. f_equal. now apply PeanoNat.Nat.le_antisymm.
+    intros. f_equal. lia.
   Qed.
 
 End Nbar.
@@ -722,7 +723,7 @@ Module WeightedGraph (V : UsualOrderedType).
     Proof.
       intros x y -> s0 s1 eq s0' s1' eq'.
       unfold DisjointAdd.
-      now rewrite eq, eq'.
+      now rewrite eq eq'.
     Qed.
 
     Lemma Add_In {s x} (H : VSet.In x s)
@@ -1521,7 +1522,7 @@ Module WeightedGraph (V : UsualOrderedType).
             * subst y. rewrite IHq.
               simple refine (let XX := lsp0_spec_le
                                          G (simplify2' G q1) in _).
-              unfold lsp in *. rewrite Hxs in XX; inversion XX.
+              unfold lsp in *. rewrite -> Hxs in XX; inversion XX.
           + destruct (from_G'_path q) as [q'|[q1 q2]]; simpl.
             * lia.
             * lia.
@@ -1587,7 +1588,7 @@ Module WeightedGraph (V : UsualOrderedType).
             * subst y.
               simple refine (let XX := lsp0_spec_le
                                          G (simplify2' G (to_paths G q1)) in _).
-              unfold lsp in *. rewrite Hxs in XX; inversion XX.
+              unfold lsp in *. rewrite -> Hxs in XX; inversion XX.
           + destruct (from_G' q) as [q'|[q1 q2]]; simpl.
             * lia.
             * rewrite weight_SimplePaths_sub; lia.
@@ -1609,7 +1610,7 @@ Module WeightedGraph (V : UsualOrderedType).
           specialize (HG _ (to_paths G s0)). lia.
         - simple refine (let XX := lsp0_spec_le
             G (simplify2' G (concat G (to_paths G p0.2) (to_paths G p0.1))) in _).
-          unfold lsp in *; rewrite Hxs in XX; inversion XX.
+          unfold lsp in *; rewrite -> Hxs in XX; inversion XX.
       Qed.
 
       Lemma lsp_G'_yx : (Some K <= lsp G' y_0 x_0)%nbar.
@@ -1698,7 +1699,7 @@ Module WeightedGraph (V : UsualOrderedType).
           + exists K. apply EdgeSet.add_spec. now left.
           + exact (reduce _ p').
           + rewrite weight_SimplePaths_sub. cbn.
-            now rewrite weight_reduce, sto_G'_weight, Hk.
+            now rewrite weight_reduce sto_G'_weight Hk.
           Unshelve.
           2-3: now apply VSetProp.subset_remove_3.
           apply VSetProp.subset_add_3. assumption.
@@ -1751,14 +1752,12 @@ Module WeightedGraph (V : UsualOrderedType).
       induction p; simpl; auto. lia.
       rewrite IHp. lia.
     Qed.
-  
-    Require Import ssreflect.
 
     Lemma negbe {b} : ~~ b <-> (~ b).
     Proof.
       intuition try congruence.
       now rewrite H0 in H.
-      now destruct b.
+      destruct b; simpl; auto.
     Qed.
 
     Lemma In_nodes_app_end {x y z} (p : Paths G x y) (e : Edges G y z) i : 
@@ -1846,7 +1845,6 @@ Module WeightedGraph (V : UsualOrderedType).
       Qed.
       Next Obligation.
         eapply Disjoint_DisjointAdd in hin; eauto.
-        do 2 red in hin. now specialize (hin a).
       Qed.
       
 
