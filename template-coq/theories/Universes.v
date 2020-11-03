@@ -14,7 +14,7 @@ Record valuation :=
   { valuation_mono : string -> positive ;
     valuation_poly : nat -> nat }.
 
-Class Evaluable (A : Type) := val : valuation -> A -> Z.
+Class Evaluable (A : Type) := val : valuation -> A -> nat.
 
 (** Levels are Set or Level or Var *)
 Module Level.
@@ -45,9 +45,9 @@ Module Level.
 
   Global Instance Evaluable : Evaluable t
     := fun v l => match l with
-               | lSet => 0
-               | Level s => Z.pos (v.(valuation_mono) s)
-               | Var x => Z.of_nat (v.(valuation_poly) x)
+               | lSet => 0%nat
+               | Level s => Pos.to_nat (v.(valuation_mono) s)
+               | Var x => (v.(valuation_poly) x)
                end.
 
 
@@ -136,11 +136,6 @@ Module Level.
 
   Definition eq_leibniz (x y : t) : eq x y -> x = y := id.
 
-  Lemma val_zero l v : 0 <= val v l.
-  Proof.
-    destruct l; cbn; lia.
-  Qed.
-
 End Level.
 
 Module LevelSet := MSetList.MakeWithLeibniz Level.
@@ -171,11 +166,11 @@ Module PropLevel.
 
   Inductive t := lSProp | lProp.
 
-  Global Instance PropLevel_Evaluable : Evaluable t :=
+  (* Global Instance PropLevel_Evaluable : Evaluable t :=
     fun v l => match l with
               lSProp => -1
             | lProp => -1
-            end.
+            end. *)
 
   Definition compare (l1 l2 : t) : comparison :=
     match l1, l2 with
@@ -222,29 +217,29 @@ Module UnivExpr.
 
   Definition is_small (e : t) : bool :=
     match e with
-    | npe (Level.lSet, false) => true
+    | npe (Level.lSet, 0%nat) => true
     | _  => false
     end.
 
   Definition is_level (e : t) : bool :=
     match e with
-    | npe (_, false) => true
+    | npe (_, 0%nat) => true
     | _  => false
     end.
 
   Definition make (l : Level.t) : t :=
-    npe ( l, 0%nat).
+    npe (l, 0%nat).
 
   Definition set : t := npe (Level.lSet, 0%nat).
   Definition type1 : t := npe (Level.lSet, 1%nat).
 
   (* Used for (un)quoting. *)
   Definition from_kernel_repr (e : Level.t * bool) : t
-    := npe (e.1, if e.2 then true else false).
+    := npe (e.1, if e.2 then 1%nat else 0%nat).
 
-  Definition to_kernel_repr (e : t) : Level.t * nat
+  Definition to_kernel_repr (e : t) : Level.t * bool
     := match e with
-       | npe (l, b) => (l, match b with 0 => false | _ => true end)
+       | npe (l, b) => (l, match b with 0%nat => false | _ => true end)
        end.
 
   Definition eq : t -> t -> Prop := eq.
@@ -283,7 +278,7 @@ Module UnivExpr.
   Definition compare_spec :
     forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
   Proof.
-    intros [|[]] [|[]]; cbn; repeat constructor.
+    intros [[? ?]] [[? ?]]; cbn; repeat constructor.
     destruct (Level.compare_spec t0 t1); repeat constructor; tas.
     subst. 
     destruct (Nat.compare_spec n n0); repeat constructor; tas. congruence.
@@ -350,6 +345,8 @@ Module Universe.
   (** Create a universe representing the given level. *)
   Definition make (l : Level.t) : t :=
     lnpe (make' (UnivExpr.make l)).
+
+  Definition of_expr e := (lnpe (make' e)).
 
   Lemma not_Empty_is_empty s :
     ~ UnivExprSet.Empty s -> UnivExprSet.is_empty s = false.
@@ -924,11 +921,11 @@ Proof.
     (* apply eq_univ''; cbn. unfold Universe.get_is_level in *. *)
     destruct (UnivExprSet.elements _) as [|l0 L] eqn:Hu1; [discriminate|].
     destruct l0, L; try discriminate.
-    * destruct e,b;inversion H;subst.
+    * destruct e,n;inversion H;subst.
       apply f_equal.
       apply eq_univ'';unfold UnivExpr.make.
       cbn. rewrite Hu1. reflexivity.
-    * destruct e,b;inversion H;subst.
+    * destruct e,n;inversion H;subst.
 Qed.
 
 Lemma univ_expr_eqb_true_iff (u v : Universe.t0) :
@@ -1266,13 +1263,12 @@ Definition constraints_of_udecl u :=
   | Polymorphic_ctx ctx => snd (AUContext.repr ctx)
   end.
 
-
-
 (* NOTE:SPROP: [prop_sub_type] controls both [SProp] and [Prop],
    since the valuation of universes does not distinguish between
    [SProp] and [Prop] (they are both [-1]). *)
 Definition llt {cf:checker_flags} (x y : Z) : Prop :=
-  if prop_sub_type then x < y else 0 <= x /\ x < y.
+  if prop_sub_type then x < y 
+  else 0 <= x /\ x < y.
 
 Declare Scope univ_scope.
 Delimit Scope univ_scope with u.
@@ -1355,14 +1351,19 @@ Context {cf:checker_flags}.
     forall v, satisfies v φ -> val v u = val v u'.
 
   Definition leq_universe_n n (φ : ConstraintSet.t) u u' :=
-    forall v, satisfies v φ -> (n + val v u <= val v u')%u.
+    forall v, satisfies v φ -> (val v u <= val v u' - n)%u.
 
   Definition leq_universe0 (φ : ConstraintSet.t) u u' :=
     forall v, satisfies v φ -> (val v u <= val v u')%u.
 
   Lemma leq_universe0_leq_universe_n (φ : ConstraintSet.t) u u' :
-    leq_universe0 φ u u' = leq_universe_n 0 φ u u'.
-  Proof. unfold leq_universe_n. prop_non_prop;auto. Qed.
+    leq_universe0 φ u u' <-> leq_universe_n 0 φ u u'.
+  Proof. unfold leq_universe_n.
+    split; intros.
+    rewrite Z.sub_0_r. auto.
+    intros v vs. specialize (H v vs).
+    rewrite Z.sub_0_r in H. apply H.
+  Qed.
 
   Definition lt_universe := leq_universe_n 1.
 
