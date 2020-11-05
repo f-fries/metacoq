@@ -17,15 +17,17 @@ Definition anon (na : name) : bool :=
   | nNamed s => false
   end.
 
+Definition banon (na : binder_annot name) : bool := anon na.(binder_name).
+
 Fixpoint nameless (t : term) : bool :=
   match t with
   | tRel n => true
   | tVar n => true
   | tEvar n l => forallb nameless l
   | tSort s => true
-  | tProd na A B => anon na && nameless A && nameless B
-  | tLambda na A b => anon na && nameless A && nameless b
-  | tLetIn na b B t => anon na && nameless b && nameless B && nameless t
+  | tProd na A B => banon na && nameless A && nameless B
+  | tLambda na A b => banon na && nameless A && nameless b
+  | tLetIn na b B t => banon na && nameless b && nameless B && nameless t
   | tApp u v => nameless u && nameless v
   | tConst c u => true
   | tInd i u => true
@@ -34,15 +36,15 @@ Fixpoint nameless (t : term) : bool :=
     nameless p && nameless c && forallb (test_snd nameless) brs
   | tProj p c => nameless c
   | tFix mfix idx =>
-    forallb (fun d => anon d.(dname)) mfix &&
+    forallb (fun d => banon d.(dname)) mfix &&
     forallb (test_def nameless nameless) mfix
   | tCoFix mfix idx =>
-    forallb (fun d => anon d.(dname)) mfix &&
+    forallb (fun d => banon d.(dname)) mfix &&
     forallb (test_def nameless nameless) mfix
   end.
 
 Definition map_def_anon {A B} (tyf bodyf : A -> B) (d : def A) := {|
-  dname := nAnon ;
+  dname := map_binder_annot (fun _ => nAnon) d.(dname) ;
   dtype := tyf d.(dtype) ;
   dbody := bodyf d.(dbody) ;
   rarg  := d.(rarg)
