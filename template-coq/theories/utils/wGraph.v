@@ -156,6 +156,12 @@ Module Nbar.
     now rewrite Z.add_0_r.
   Defined.
 
+  Lemma sub_diag n : n - n = match n with None => None | Some _ => Some 0 end.
+  Proof. destruct n; simpl. now rewrite Z.sub_diag. auto. Defined.
+
+  Lemma max_None n : max n None = n.
+  Proof. destruct n; simpl; auto. Qed.
+
   Definition max_lub n m p : n <= p -> m <= p -> max n m <= p.
   Proof.
     destruct n, m, p; cbn; intuition lia.
@@ -1472,6 +1478,111 @@ Module WeightedGraph (V : UsualOrderedType).
       destruct lsp as [[]|]; try congruence.
     Qed.
 
+    Lemma le_Some_lsp {n x y} : (Some n <= lsp x y)%nbar -> 
+      ∑ k, lsp x y = Some k /\ n <= k.
+    Proof.
+      destruct lsp eqn:xy.
+      simpl. intros. eexists; split; eauto.
+      simpl; now intros [].
+    Qed.
+
+
+
+    Lemma Zle_opp {n m} : - n <= m <-> - m <= n.
+    Proof. lia. Qed.
+
+    Lemma Zle_opp' {n m} : n <= m <-> - m <= - n.
+    Proof. lia. Qed.
+
+    Lemma lsp_xx {HG : acyclic_no_loop} {x} : lsp x x = Some 0.
+    Proof.
+      rewrite /lsp.
+      now rewrite acyclic_lsp0_xx.
+    Qed.
+
+    Definition edge_paths {e} : EdgeSet.In e (E G) -> Paths e..s e..t.
+    Proof.
+      intros hin.
+      eapply (paths_step (y := e..t)). exists e..w. destruct e as [[s w] t].
+      simpl in *. apply hin. constructor.
+    Defined.
+
+    Lemma Z_of_to_label_pos x : 0 <= x -> Z.of_nat (to_label (Some x)) = x.
+    Proof.
+      intros le.
+      rewrite Z_of_to_label.
+      destruct (Z.leb_spec 0 x); auto. lia.
+    Qed.
+
+    Lemma to_label_max x y : (Some 0 <= x)%nbar -> to_label (max x y) = Nat.max (to_label x) (to_label y).
+    Proof.
+      destruct x; intros H; simpl in H; auto. 2:elim H.
+      eapply Nat2Z.inj.
+      rewrite Nat2Z.inj_max.
+      destruct y; cbn -[to_label].
+      rewrite Z_of_to_label_pos; try lia.
+      rewrite Z_of_to_label_pos. lia.
+      rewrite Z_of_to_label.
+      destruct (Z.leb_spec 0 z0); lia.
+      rewrite Z_of_to_label_pos; try lia.
+      simpl. lia.
+    Qed.
+
+    Lemma lsp_from_source {HG : acyclic_no_loop} {x} {n} : lsp (s G) x = Some n -> 0 <= n.
+    Proof.
+      intros H.
+      assert (VSet.In x (V G)).
+      destruct (lsp0_spec_eq _ H).
+      apply (SimplePaths_In' x0). eapply HI.
+      destruct (lsp_s _ H0) as [n' [lspeq w]].
+      rewrite H in lspeq. congruence.
+    Qed.
+
+    Lemma lsp_to_source {x z} : lsp x (s G) = Some z -> z <= 0.
+    Proof.
+      intros h.
+      destruct (lsp0_spec_eq z h).
+      pose proof (source_bottom _ (to_paths x0)).
+      rewrite -sweight_weight in H0. lia.
+    Qed.
+
+    Lemma lsp_source_max {HG : acyclic_no_loop} {x y} : VSet.In x (V G) -> VSet.In y (V G) ->
+       (lsp y x <= lsp (s G) x)%nbar.
+    Proof.
+      intros inx iny.
+      destruct (Z_of_to_label_s x) as [zl [eq [pos zof]]]; eauto.
+      rewrite eq. simpl.
+      destruct (lsp y x) eqn:yx.
+      simpl.
+      pose proof (lsp_codistance (s G) y x).
+      rewrite eq yx in H. simpl in *.
+      destruct (lsp_s y iny) as [ly [lspy neg]].
+      rewrite lspy in H. simpl in H. lia.
+      now simpl.
+    Qed.
+
+    Definition spaths_one {s x y k} (Hx : VSet.In x s)
+            (Hk : EdgeSet.In (x, k, y) (E G))
+      : SimplePaths s x y.
+    Proof.
+      econstructor. 3: constructor. now apply DisjointAdd_remove1.
+      exists k. assumption.
+    Defined.
+
+    Lemma lsp_add {HG : acyclic_no_loop} {s t y n m w} : 
+      lsp s y = Some n -> 
+      lsp t y = Some m -> 
+      EdgeSet.In (s, w, t) (E G) -> m <= n - w.
+    Proof.
+      intros sy ty ed.
+      pose proof (lsp_codistance s t y).
+      rewrite sy ty in H.
+      assert(VSet.In s (V G)). apply (edges_vertices _ ed).
+      epose proof (lsp0_spec_le (spaths_one H0 ed)).
+      simpl in H1. apply le_Some_lsp in H1 as [k [st le]].
+      rewrite st /= in H. lia.
+    Qed.
+
     (* Lemma is_acyclic_correct : reflect acyclic_no_loop is_acyclic. *)
     (* Proof. *)
     (*   eapply reflect_logically_equiv. eapply acyclic_caract2. *)
@@ -1481,23 +1592,302 @@ Module WeightedGraph (V : UsualOrderedType).
     (* Qed. *)
   End graph.
 
-  Definition spaths_one {G s x y k} (Hx : VSet.In x s)
-             (Hk : EdgeSet.In (x, k, y) (E G))
-    : SimplePaths G s x y.
-  Proof.
-    econstructor. 3: constructor. now apply DisjointAdd_remove1.
-    exists k. assumption.
-  Defined.
-
   Definition add_edges G e :=
     add_edge (add_edge G e) (opp_edge e).
-  
-  Section graph2.
-    Context (G : t) {HI : invariants G} {HG : acyclic_no_loop G}.
-    Arguments sweight {G s x y}.
-    Arguments weight {G x y}.
+  Arguments sweight {G s x y}.
+  Arguments weight {G x y}.
 
-    Section subgraph.
+  Module Subgraph1.    
+    Section graph2.
+    Context (G : t) {HI : invariants G} {HG : acyclic_no_loop G}.
+    Context (y_0 x_0 : V.t) (Vx : VSet.In x_0 (V G))
+              (Vy : VSet.In y_0 (V G))
+              (K : Z) 
+              (Hxs : lsp G x_0 y_0 = Some K).
+
+    Local Definition G' : t
+      := (V G, EdgeSet.add (y_0, - K, x_0) (E G), s G).
+
+    Definition to_G' {u v} (q : Paths G u v) : Paths G' u v.
+    Proof.
+      clear -q.
+      induction q; [constructor|].
+      econstructor. 2: eassumption.
+      exists e.π1. cbn. apply EdgeSet.add_spec; right. exact e.π2.
+    Defined.
+
+    Lemma to_G'_weight {u v} (p : Paths G u v)
+      : weight (to_G' p) = weight p.
+    Proof.
+      clear.
+      induction p. reflexivity.
+      simpl. now rewrite IHp.
+    Qed.
+
+    Opaque Edge.eq_dec.
+
+
+    Definition from_G'_path {u v} (q : Paths G' u v)
+      : Paths G u v + (Paths G u y_0 * Paths G x_0 v).
+    Proof.
+      clear -q. induction q.
+      - left; constructor.
+      - induction (Edge.eq_dec (y_0, -K, x_0) (x, e.π1, y)) as [XX|XX].
+        + right. split.
+          * rewrite (fst_eq (fst_eq XX)); constructor.
+          * destruct IHq as [IHq|IHq].
+            -- now rewrite (snd_eq XX).
+            -- exact IHq.2.
+        + induction IHq as [IHq|IHq].
+          * left. econstructor; try eassumption.
+            exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
+          * right. split.
+            -- econstructor; try eassumption.
+                2: exact IHq.1.
+                exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
+            -- exact IHq.2.
+    Defined.
+
+    Lemma from_G'_path_weight {u v} (q : Paths G' u v)
+      : match from_G'_path q with
+        | inl q' => weight q = weight q'
+        | inr (q1, q2) => 
+          weight q <= weight q1 - K + weight q2
+        end.
+    Proof.
+      clear -HI HG Hxs.
+      induction q.
+      - reflexivity.
+      - simpl.
+        destruct (Edge.eq_dec (y_0, - K, x_0) (x, e.π1, y)) as [XX|XX]; simpl.
+        + destruct (fst_eq (fst_eq XX)). simpl.
+          inversion XX. 
+          destruct (from_G'_path q) as [q'|[q1 q2]]; simpl.
+          * destruct (snd_eq XX); cbn.
+            destruct e as [e He]; cbn in *. lia.
+          * subst y.
+            transitivity (-K + weight q1 - K + weight q2). lia.
+            epose proof (lsp0_spec_le G (simplify2' G q1)).
+            unfold lsp in Hxs; rewrite Hxs /= in H.
+            pose proof (weight_simplify2' G q1). lia.
+        + destruct (from_G'_path q) as [q'|[q1 q2]]; simpl.
+          * lia.
+          * lia.
+    Qed.
+
+    Definition from_G' {S u v} (q : SimplePaths G' S u v)
+      : SimplePaths G S u v + (SimplePaths G S u y_0 * SimplePaths G S x_0 v).
+    Proof.
+      clear -q. induction q.
+      - left; constructor.
+      - induction (Edge.eq_dec (y_0, - K, x_0) (x, e.π1, y)) as [XX|XX].
+        + right. split.
+          * rewrite (fst_eq (fst_eq XX)); constructor.
+          * eapply SimplePaths_sub.
+            eapply DisjointAdd_Subset; eassumption.
+            induction IHq as [IHq|IHq].
+            -- now rewrite (snd_eq XX).
+            -- exact IHq.2.
+        + induction IHq as [IHq|IHq].
+          * left. econstructor; try eassumption.
+            exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
+          * right. split.
+            -- econstructor; try eassumption.
+                2: exact IHq.1.
+                exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
+            -- eapply SimplePaths_sub; [|exact IHq.2].
+                eapply DisjointAdd_Subset; eassumption.
+    Defined.
+
+    Lemma from_G'_weight {S u v} (q : SimplePaths G' S u v)
+      : match from_G' q with
+        | inl q' => sweight q = sweight q'
+        | inr (q1, q2) => sweight q <= sweight q1 - K + sweight q2
+        end.
+    Proof.
+      clear -HI HG Hxs.
+      induction q.
+      - reflexivity.
+      - simpl.
+        destruct (Edge.eq_dec (y_0, - K, x_0) (x, e.π1, y)) as [XX|XX]; simpl.
+        + destruct (fst_eq (fst_eq XX)). simpl.
+          inversion XX. rewrite weight_SimplePaths_sub.
+          destruct (from_G' q) as [q'|[q1 q2]]; simpl.
+          * destruct (snd_eq XX); cbn.
+            destruct e as [e He]; cbn in *; lia.
+          * subst y.
+            assert (Hle := lsp0_spec_le G (simplify2' G (to_paths G q1))).
+            unfold lsp in *. rewrite Hxs /= in Hle.
+            pose proof (weight_simplify2' G (to_paths G q1)).
+            rewrite -sweight_weight in H. lia.
+        + destruct (from_G' q) as [q'|[q1 q2]]; simpl.
+          * lia.
+          * rewrite weight_SimplePaths_sub; lia.
+    Qed.
+
+    Lemma lsp_paths {x y} (p : Paths G x y) : ∑ n, lsp G x y = Some n /\ weight p <= n.
+    Proof.
+      pose proof (lsp0_spec_le G (simplify2' G p)) as ineq.
+      unfold lsp in *.
+      destruct (lsp0 G (V G) x y). eexists; eauto. split; eauto.
+      simpl in ineq. epose proof (weight_simplify2' G p). lia.
+      now simpl in ineq.
+    Qed.
+
+    Lemma Paths_In {x y} : VSet.In y (V G) -> Paths G x y -> VSet.In x (V G).
+    Proof.
+      intros hin p; induction p; auto.
+      destruct e as [? ine].
+      now eapply edges_vertices in ine.
+    Qed.
+
+    Global Instance HI' : invariants G'.
+    Proof.
+      split.
+      - cbn. intros e He. apply EdgeSet.add_spec in He; destruct He as [He|He].
+        subst; cbn. split; assumption.
+        now apply HI.
+      - apply HI.
+      - intros z Hz. epose proof (source_paths G z Hz).
+        destruct H as [[p [w]]]. sq. exists (to_G' p).
+        sq. now rewrite to_G'_weight.
+      - intros z Hz.
+        unfold G' in Hz.
+        destruct (from_G'_path Hz) as [q'|[q1 q2]] eqn:eq; simpl.
+        simpl in q'.
+        * pose proof (from_G'_path_weight Hz).
+          rewrite eq in H. rewrite H. simpl in *.
+          now eapply source_bottom.
+        * simpl in q2, Hz.
+          assert (Hzw := from_G'_path_weight Hz).
+          rewrite eq in Hzw.
+          etransitivity; [eassumption|]. clear Hz eq Hzw.
+          destruct (source_paths G _ Vy) as [[sy [w]]].
+          destruct (lsp_paths sy) as [sy' [lspsy wsy]].
+          destruct (lsp_paths q2) as [xs [exs wxs]].
+          epose proof (lsp_source_max G Vy Vx). rewrite Hxs lspsy /= in H.
+          pose proof (lsp_codistance G x_0 (s G) y_0).
+          rewrite exs lspsy Hxs /= in H0.
+          assert(xs <= 0) by lia.
+          assert (Vz := Paths_In Vy q1).
+          destruct (source_paths G _ Vz) as [[sz [wz]]].
+          destruct (lsp_paths sz) as [sz' [lspsz wsz]].
+          pose proof (lsp_codistance G x_0 z y_0).
+          rewrite Hxs in H2.
+          pose proof (lsp_codistance G x_0 (s G) z).
+          rewrite exs lspsz in H3.
+          simpl in H3.
+          eapply le_Some_lsp in H3 as [xz [lxz lexz]].
+          rewrite lxz in H2.
+          destruct (lsp_paths q1) as [zy [lspzy wzy]].
+          rewrite lspzy in H2. simpl in H2. lia.
+    Qed.
+
+    Global Instance HG' : acyclic_no_loop G'.
+    Proof.
+      apply acyclic_caract2. exact _. intros x Hx.
+      pose proof (lsp0_spec_le G' (spaths_refl G' (V G') x)) as H; cbn in H.
+      case_eq (lsp0 G' (V G) x x); [|intro e; rewrite e in H; cbn in H; lia].
+      intros m Hm. unfold lsp; cbn; rewrite Hm. rewrite Hm in H.
+      simpl in H.
+      apply lsp0_spec_eq in Hm.
+      destruct Hm as [p Hp]. subst.
+      pose proof (from_G'_weight p) as XX.
+      destruct (from_G' p).
+      - f_equal. rewrite (sweight_weight G s0) in XX.
+        specialize (HG _ (to_paths G s0)). lia.
+      - assert (Hle := lsp0_spec_le G (simplify2' G (concat G (to_paths G p0.2) (to_paths G p0.1)))).
+        destruct p0 as [q1 q2]; simpl in *.
+        unfold lsp in *; rewrite -> Hxs in Hle. simpl in Hle.
+        epose proof (weight_simplify2' G (concat G (to_paths G q2) (to_paths G q1))).
+        rewrite weight_concat -! sweight_weight in H0. f_equal.
+        enough (sweight q1 - K + sweight q2 <= 0). lia.
+        lia.
+    Qed.
+
+    Lemma lsp_G'_yx : (Some (- K) <= lsp G' y_0 x_0)%nbar.
+    Proof.
+      unshelve refine (transport (fun K => (Some K <= _)%nbar) _ (lsp0_spec_le _ _)).
+      - eapply spaths_one; tas.
+        apply EdgeSet.add_spec. now left.
+      - cbn. lia.
+    Qed.
+
+    Lemma correct_labelling_lsp_G'
+      : correct_labelling G (to_label ∘ (lsp G' (s G'))).
+    Proof.
+      pose proof (lsp_correctness G') as XX.
+      split. exact XX.p1.
+      intros e He; apply XX; cbn.
+      apply EdgeSet.add_spec; now right.
+    Qed.
+
+    Definition sto_G' {S u v} (p : SimplePaths G S u v)
+      : SimplePaths G' S u v.
+    Proof.
+      clear -p. induction p.
+      - constructor.
+      - econstructor; tea. exists e.π1.
+        apply EdgeSet.add_spec. right. exact e.π2.
+    Defined.
+
+
+    Lemma sto_G'_weight {S u v} (p : SimplePaths G S u v)
+      : sweight (sto_G' p) = sweight p.
+    Proof.
+      clear.
+      induction p. reflexivity.
+      simpl. now rewrite IHp.
+    Qed.
+
+    Lemma lsp_G'_incr x y : (lsp G x y <= lsp G' x y)%nbar.
+    Proof.
+      case_eq (lsp G x y); cbn; [|trivial].
+      intros kxy Hkxy. apply lsp0_spec_eq in Hkxy.
+      destruct Hkxy as [pxy Hkxy].
+      etransitivity. 2: eapply (lsp0_spec_le _ (sto_G' pxy)).
+      rewrite sto_G'_weight. now rewrite Hkxy.
+    Qed.
+
+    Lemma lsp_G'_sx : (lsp G' (s G) y_0 + Some (- K) <= lsp G' (s G) x_0)%nbar.
+    Proof.
+      etransitivity. 2: eapply lsp_codistance; try exact _.
+      apply plus_le_compat_l. apply lsp_G'_yx.
+    Qed.
+
+    Lemma lsp_G'_spec_left x :
+      lsp G' y_0 x = max (lsp G y_0 x) (Some (- K) + lsp G x_0 x)%nbar.
+    Proof.
+      apply Nbar.le_antisymm.
+      - case_eq (lsp G' y_0 x); [|cbn; trivial].
+        intros k Hk.
+        apply lsp0_spec_eq in Hk; destruct Hk as [p' Hk].
+        subst k.
+        generalize (from_G'_weight p').
+        destruct (from_G' p') as [p|[p1 p2]].
+        + intros ->. apply max_le'. left. apply lsp0_spec_le.
+        + intros He. apply max_le'. right.
+          pose proof (lsp_paths (to_paths G p2)) as [x0x [lspx0x wp2]].
+          rewrite -sweight_weight in wp2. rewrite lspx0x. simpl.
+          pose proof (lsp_paths (to_paths G p1)) as [y0y0 [lspy0 wp1]].
+          rewrite -sweight_weight in wp1. rewrite lsp_xx in lspy0.
+          injection lspy0; intros <-. lia.
+      - apply max_lub. apply lsp_G'_incr.
+        case_eq (lsp G x_0 x); cbn; [intros k Hk|trivial].
+        etransitivity.
+        2:apply (lsp_codistance G' y_0 x_0 x).
+        pose proof (lsp_G'_yx).
+        eapply le_Some_lsp in H as [y0x0 [-> w]].
+        generalize (lsp_G'_incr x_0 x). rewrite Hk.
+        move/le_Some_lsp => [x0x [-> w']]. simpl. lia.
+    Qed.
+    End graph2.
+  End Subgraph1.
+
+  Section subgraph.
+    Context (G : t) {HI : invariants G} {HG : acyclic_no_loop G}.
+
+    Section subgraph2.
       Context (y_0 x_0 : V.t) (Vx : VSet.In x_0 (V G))
               (Vy : VSet.In y_0 (V G))
               (Hxs : lsp G x_0 y_0 = None)              
@@ -1541,8 +1931,8 @@ Module WeightedGraph (V : UsualOrderedType).
               exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
             * right. split.
               -- econstructor; try eassumption.
-                 2: exact IHq.1.
-                 exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
+                  2: exact IHq.1.
+                  exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
               -- exact IHq.2.
       Defined.
 
@@ -1565,7 +1955,7 @@ Module WeightedGraph (V : UsualOrderedType).
               destruct e as [e He]; cbn in *. lia.
             * subst y. rewrite IHq.
               simple refine (let XX := lsp0_spec_le
-                                         G (simplify2' G q1) in _).
+                                          G (simplify2' G q1) in _).
               unfold lsp in *. rewrite -> Hxs in XX; inversion XX.
           + destruct (from_G'_path q) as [q'|[q1 q2]]; simpl.
             * lia.
@@ -1590,10 +1980,10 @@ Module WeightedGraph (V : UsualOrderedType).
               exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
             * right. split.
               -- econstructor; try eassumption.
-                 2: exact IHq.1.
-                 exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
+                  2: exact IHq.1.
+                  exists e.π1. exact (EdgeSetFact.add_3 XX e.π2).
               -- eapply SimplePaths_sub; [|exact IHq.2].
-                 eapply DisjointAdd_Subset; eassumption.
+                  eapply DisjointAdd_Subset; eassumption.
       Defined.
 
       Lemma from_G'_weight {S u v} (q : SimplePaths G' S u v)
@@ -1614,7 +2004,7 @@ Module WeightedGraph (V : UsualOrderedType).
               destruct e as [e He]; cbn in *; lia.
             * subst y.
               simple refine (let XX := lsp0_spec_le
-                                         G (simplify2' G (to_paths G q1)) in _).
+                                          G (simplify2' G (to_paths G q1)) in _).
               unfold lsp in *. rewrite -> Hxs in XX; inversion XX.
           + destruct (from_G' q) as [q'|[q1 q2]]; simpl.
             * lia.
@@ -1744,7 +2134,7 @@ Module WeightedGraph (V : UsualOrderedType).
           case_eq (lsp G x_0 x); cbn; [intros k Hk|trivial].
           apply lsp0_spec_eq in Hk. destruct Hk as [p Hk].
           unshelve refine (transport (fun K => (Some K <= _)%nbar)
-                                     _ (lsp0_spec_le _ _)).
+                                      _ (lsp0_spec_le _ _)).
           eapply SimplePaths_sub. shelve.
           pose (p' := sto_G' p).
           unshelve econstructor.
@@ -1765,9 +2155,7 @@ Module WeightedGraph (V : UsualOrderedType).
           apply VSetProp.subset_add_3. assumption.
           apply snodes_Subset.
       Qed.
-
-    End subgraph.
-
+    End subgraph2.
 
     Lemma VSet_add_remove x y p : 
       x <> y ->
@@ -2014,34 +2402,6 @@ Module WeightedGraph (V : UsualOrderedType).
       epose proof (sconcat s1 _ s2). *)
     (* Defined. *)
     
-
-    Lemma Zle_opp {n m} : - n <= m <-> - m <= n.
-    Proof. lia. Qed.
-
-    Lemma Zle_opp' {n m} : n <= m <-> - m <= - n.
-    Proof. lia. Qed.
-
-    Lemma le_Some_lsp {n x y} : (Some n <= lsp G x y)%nbar -> 
-      ∑ k, lsp G x y = Some k /\ n <= k.
-    Proof.
-      destruct lsp eqn:xy.
-      simpl. intros. eexists; split; eauto.
-      simpl; now intros [].
-    Qed.
-
-    Lemma lsp_xx {x} : lsp G x x = Some 0.
-    Proof.
-      rewrite /lsp.
-      now rewrite acyclic_lsp0_xx.
-    Qed.
-
-    Definition edge_paths {e} : EdgeSet.In e (E G) -> Paths G e..s e..t.
-    Proof.
-      intros hin.
-      eapply (paths_step (y := e..t)). exists e..w. destruct e as [[s w] t].
-      simpl in *. apply hin. constructor.
-    Defined.
-
     Lemma leq_vertices_caract0 {n x y} (Vy : VSet.In y (V G)) :
       leq_vertices G n x y <-> (Some n <= lsp G x y)%nbar.
     Proof.
@@ -2097,42 +2457,130 @@ Module WeightedGraph (V : UsualOrderedType).
             assert(lx < -z) by lia.
             (* The lsp from x to y does *not* go through the source. *)
             destruct (lsp G x y) eqn:xy.
-            2:{ simpl. admit. }
+            2:{ simpl.
+              generalize (lsp_codistance G x (s G) y).
+              now rewrite xs Hly xy /=. }
             simpl.
+            assert (smax := lsp_source_max G Vy Vx). 
+            rewrite xy Hly in smax. simpl in *.
+            assert (ly >= n) by lia.
+            assert(z < 0). lia.
             assert (lx <= - z) by lia.
-            pose (K := (Z.to_nat (- z))).
-            pose (l := (fun v => if V.eq_dec v x then K
-                             else to_label (lsp G (s G) v))%nat).
-            unshelve refine (let XX := Hle l _ in _); subst l K.
+            destruct (Z.leb_spec n z0); auto.
+            elimtype False.
+            enough (ly < lx + n). lia.
+            assert (lyx := lsp_sym _ xy).
+            destruct (lsp G y x) eqn:yx. simpl in lyx.
+            assert (smax' := lsp_source_max G Vx Vy).
+            rewrite yx Hlx in smax'. simpl in smax'. 
+            pose proof (lsp_codistance G (s G) y x).
+            rewrite Hly Hlx yx /= in H7.
+            pose proof (lsp_codistance G (s G) x y).
+            rewrite Hly Hlx xy /= in H8.
+
+
+            pose (K := - z0). (*if n <=? 0 then Z.max lx (Z.succ ly - n) else Z.max lx (Z.succ ly)). *)
+            unshelve epose proof (correct_labelling_lsp_G' y x _ _ _ K) as XX;
+              tas; try apply HI. admit.
+            set (G' := G' y x K) in XX.
+            assert (HI' : invariants G'). {
+              eapply HI'; tas. admit. }
+            specialize (Hle _ XX); clear XX; cbn in Hle.
+            assert (XX: (Some K <= lsp G' y x)%nbar). {
+              apply lsp_G'_yx. apply Vy. }
+            assert (HG' : acyclic_no_loop G'). { apply HG'; eauto. admit. }
+            destruct (Z_of_to_label_s G' _ Vx) as [kx' [Hkx' [kx'pos zofx']]].
+            cbn in Hkx'.
+            rewrite zofx' in Hle.
+            destruct (Z_of_to_label_s G' _ Vy) as [ky' [Hky' [ky'pos zofy']]].
+            cbn in Hky'. rewrite zofy' in Hle.
+            eapply le_Some_lsp in XX as [yx [lspyx lK]].
+            epose proof (lsp_codistance G' (s G) y x).
+            rewrite lspyx Hkx' Hky' in H7. simpl in H7.
+
+
+            enough ((Some ky' <= Some K + lsp G x y)%nbar) as HH. {
+              revert HH. destruct (lsp G x y); cbn; auto. lia. intros []. }
+            rewrite xy. simpl. subst K. lia.
+            erewrite (lsp_G'_spec_left x y _ _ K). in Hky'. apply HI.
+            apply eq_max in Hky'. destruct Hky' as [Hk|Hk].
+            -- rewrite Hly in Hk. apply some_inj in Hk.
+              elimtype False.
+              clear -XX ky'pos Hk Hle''. subst. subst K.
+              destruct (Z.leb_spec n 0); lia.
+            -- rewrite Hk. reflexivity.
+
+
+
+
+
+
+
+            set (K x := to_label (max (lsp G (s G) x)
+                            match lsp G x y with 
+                            | Some x => lsp G (s G) y - Some x
+                            | None => (lsp G (s G) x + Some ly)%nbar
+                            end)%nbar).
+            unshelve refine (let XX := Hle K _ in _); subst K.
             split.
             -- destruct (V.eq_dec (s G) x). subst x. simpl.
               rewrite lsp_xx in xs. injection xs. intros <-.
-              lia.
-              simpl.
-              now apply lsp_correctness.
+              lia. rewrite Hly sub_diag.
+              rewrite lsp_xx. simpl. reflexivity.
             -- intros e H'.
                destruct e as [[s w] t]; cbn in *.
-               destruct (V.eq_dec s x); simpl;
-               destruct (V.eq_dec t x); simpl.
-               ++ subst x t. simpl.
-                  specialize (HG s (edge_paths H')).
-                  cbn in HG. lia.
-               ++ subst s. rewrite zs.
-                  assert (lx - z >= 0) by lia. admit.
-                ++ subst t. rewrite zs.
-                  specialize (Hle _ (lsp_correctness G)). simpl in Hle.
-                  destruct (Z_of_to_label_s G s) as [zl [eq [pos zof]]]; eauto.
-                  apply (edges_vertices _ _ H'). rewrite zof.
-                  admit.
-                ++ specialize (Hle _ (lsp_correctness G)). simpl in Hle.
-                  destruct (Z_of_to_label_s G s) as [zl [eq [pos zof]]]; eauto.
-                  admit. admit.
-            -- clearbody XX; cbn in XX.
-              destruct (V.eq_dec x x) as [Hx|Hx]; [|contradiction]. simpl in XX.
-              destruct (V.eq_dec y x) as [Hy|Hy]. simpl in XX.
-              rewrite zs in XX. subst y. assert (n <= 0) by lia.
-              rewrite lsp_xx. now simpl.
-              simpl in XX. rewrite Hlab in XX. lia.
+               rewrite Hly.
+               assert (VSet.In s (V G) /\ VSet.In t (V G)) as [Vs Vt]. now apply HI in H'.
+               destruct (Z_of_to_label_s G _ Vs) as [ls [Hls [lspos zofls]]].
+               destruct (Z_of_to_label_s G _ Vt) as [lt [Hlt [ltpos zoflt]]].             
+               rewrite !to_label_max. rewrite Hls; cbn; lia.
+               rewrite Hlt; cbn; lia.
+               rewrite !Nat2Z.inj_max zofls zoflt.
+               assert (ls + w <= lt). admit.
+               destruct (lsp G s y) eqn:sy. cbn -[to_label].
+               assert (maxs := lsp_source_max Vy Vs).
+               rewrite sy Hly /= in maxs.
+               destruct (lsp G t y) eqn:ty.
+               ++ assert (maxt := lsp_source_max Vy Vt).
+                rewrite ty Hly /= in maxt;
+                cbn -[to_label].
+                rewrite Z_of_to_label_pos. lia.
+                rewrite Z_of_to_label_pos. lia.
+                enough (-z1 + w <= -z2). lia.
+                enough (z2 <= z1 - w). lia.
+                eapply lsp_add; eauto.
+               ++ cbn -[to_label].
+               rewrite !Z_of_to_label_pos; try lia.
+               rewrite Hlt. cbn -[to_label].
+               rewrite !Z_of_to_label_pos; try lia.
+               assert ()
+               
+               enough (ly - z1 + w <= lt).
+               enough (ly - z1 <= ls). lia.
+               enough (ls + z1 = ly). lia.
+               pose proof (lsp_sym _ sy).
+               (* s G -> y - (s -> y) + s -> t <= s -> t*)
+
+               admit.
+               cbn -[to_label]. simpl.
+               destruct (lsp G t y) eqn:ty.
+               assert (maxt := lsp_source_max Vy Vt).
+               rewrite ty Hly /= in maxt;
+               rewrite Z_of_to_label_pos. lia.
+               (* absurd: lsp t y is defined *) admit.
+               simpl. lia.
+
+
+            -- clearbody XX. cbn in XX.
+                rewrite Hly in XX.
+                rewrite lsp_xx in XX.
+                cbn -[to_label] in XX.
+                rewrite Z.sub_0_r in XX.
+                rewrite Z.max_idempotent in XX.
+                rewrite -Hly Hlab in XX.
+                rewrite Hly xy Hlx in XX.
+                cbn -[to_label] in XX.
+                rewrite Z_of_to_label_pos in XX; lia.
           
         + pose (K := if n <=? 0 then Z.max lx (Z.succ ly - n) else Z.max lx (Z.succ ly)).
           unshelve epose proof (correct_labelling_lsp_G' _ _ _ _ xs K) as XX;
@@ -2177,25 +2625,6 @@ Module WeightedGraph (V : UsualOrderedType).
       simpl. left; auto. destruct IHx0 as [[sw ->]|IH].
       destruct e. simpl. specialize (edges_vertices _ _ i) as [Hs Ht]. right; apply Ht.
       right; auto.
-    Qed.
-
-    Lemma lsp_to_source {x z} : lsp G x (s G) = Some z -> z = 0.
-    Proof.
-      intros h.
-      destruct (lsp0_spec_eq G z h).
-      destruct (Paths_to_source G (to_paths _ x0)). subst.
-      now rewrite sweight_weight.
-    Qed.
-
-    Lemma lsp_from_source {x} {n}
-    : lsp G (s G) x = Some n -> 0 <= n.
-    Proof.
-      intros H.
-      assert (VSet.In x (V G)).
-      destruct (lsp0_spec_eq G _ H).
-      apply (SimplePaths_In' G x0). eapply HI.
-      destruct (lsp_s G _ H0) as [n' [lspeq w]].
-      rewrite H in lspeq. congruence.
     Qed.
 
     Lemma leq_vertices_caract {n x y} :
