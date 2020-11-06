@@ -1,6 +1,7 @@
 (* Distributed under the terms of the MIT license. *)
 Require Import ssrbool MSetWeakList MSetFacts MSetProperties.
 From MetaCoq.Template Require Import utils config Universes wGraph.
+From Equations Require Import Equations.
 
 Import ConstraintType.
 
@@ -11,6 +12,8 @@ Arguments Nat.eqb : simpl nomatch.
 Definition Z_of_bool (b : bool) : Z :=
   if b then 1 else 0.
 Notation "⎩ b ⎭" := (Z_of_bool b).
+
+Derive NoConfusion for universes.
 
 (** variable levels are levels which are Level or Var *)
 Module VariableLevel.
@@ -412,9 +415,6 @@ Qed.
 
 End GC.
 
-
-
-
 Module Import wGraph := wGraph.WeightedGraph Level.
 
 Local Notation lSet := Level.lSet.
@@ -425,13 +425,16 @@ Definition universes_graph := wGraph.t.
 Definition init_graph : universes_graph
   := (VSet.singleton lSet, EdgeSet.empty, lSet).
 
+From Equations.Prop Require Import DepElim.
+
 Lemma init_graph_invariants : invariants init_graph.
 Proof.
   repeat split; cbn in *.
   1-2: inversion H. sets.
   apply VSet.singleton_spec in H. subst.
   exists (paths_refl _ _). simpl. sq. lia.
-  intros e In. inversion In.
+  intros e In. depind In; simpl. lia.
+  depelim e. elimtype False. now eapply EdgeSet.empty_spec in i.
 Defined.
 
 
@@ -1172,6 +1175,7 @@ Section CheckLeq.
   Proof. destruct x; simpl; auto. Qed.
 
   (* Non trivial lemma *)
+  (* l + n  <= max (l1, ... ln)  -> exists i, l+n <= li *)
   Lemma gc_leq_universe_n_sup lt (l : Level.t) b (u : Universe.t0)
         (e := UnivExpr.npe (l, b)) :
       gc_level_declared l ->
@@ -1186,29 +1190,29 @@ Section CheckLeq.
     assert (Hs : wGraph.s G = lSet) by now subst G.
  
     case_eq (lsp G l lSet).
-    (* case where there is a path from l to Set, so l = Set.
-      This implies that lt + b <= val v u.
+    (* case where there is a path from l to Set, so l <= Set+ (-m).
+      This implies that -m + b <= val v u.
     *)
     - intros m Hm. red in H.
+      (** Needs to strengthen the argument using a valuations of l with - m *)
       assert (Hinl : VSet.In l (wGraph.V G)). {
         red in Hl;  cbn in Hl;
           now subst G. }
       epose proof (lsp_to_s G Hinl).
-      rewrite Hs in H0. specialize (H0 Hm). subst m.
-      assert (Hl' : forall v, gc_satisfies v uctx.2 -> val v l = 0%nat). {
+      rewrite Hs in H0. specialize (H0 Hm).
+      assert (Hl' : forall v, gc_satisfies v uctx.2 -> (val v l <= Z.to_nat (- m))%nat). {
         intros v Hv. apply make_graph_spec in Hv.
-        enough (⟦ Universe.make l ⟧_v = UType 0)%nat as HH. {
-          rewrite Universe.val_make_npl in HH. congruence. }
         rewrite <- HG in Hv.
         eapply correct_labelling_lsp in Hm; tea.
-        cbn in Hm. rewrite val_labelling_of_valuation. f_equal. lia. }
+        cbn in Hm.
+        change (labelling_of_valuation v l) with (val v l) in Hm. lia. }
       assert (UnivExprSet.for_all
                 (fun ei => match ei with
                         | UnivExpr.npe (li, bi) =>
                           le_lt_dec (Some (Z.of_nat bi)
                                      + Some (match b with 0%nat => 1%Z | _ => (- (Z.pred (Z.of_nat b)))%Z end)
                                      + lsp G (wGraph.s G) li)
-                                    (Some ⎩ lt ⎭)%Z
+                                    (Some (⎩ lt ⎭))%Z
                         end)%nbar
                 u = false) as HH. {
         apply not_true_iff_false; intro HH.
@@ -1216,9 +1220,12 @@ Section CheckLeq.
         set (lab := fun x => to_label (lsp G (wGraph.s G) x)) in *.
         pose proof (make_graph_spec' _ Huctx lab) as Hv.
         forward Hv; [now rewrite <- HG|].
-        specialize (H _ Hv); cbn in H. rewrite Hl' in H; tas.
-        subst e; clear Hinl Hl' l Hl Hm Hv.
-        rewrite Nat.add_0_r in H.
+        specialize (H _ Hv); cbn in H.
+        specialize (Hl' _ Hv).
+        subst e.
+        (* assert (Z.of_nat b - m <= Z.of_nat (val (valuation_of_labelling lab) u) - ⎩ lt ⎭)%Z.
+        rewrite Nat2Z.inj_add in H. *)
+        clear Hinl Hm Hv.
         apply UnivExprSet.for_all_spec in HH; proper.
         apply switch_minus in H. 
         rewrite Z_of_nat_bool_to_nat in H.
@@ -1240,7 +1247,17 @@ Section CheckLeq.
             destruct (Z.leb_spec 0 ni); auto. lia. }
           rewrite !Nat2Z.inj_add in H.
           rewrite XX in H; clear Hni XX.
+          rewrite Z_of_nat_inj_bool in H.
           destruct lt; simpl in *; destruct b; lia. }
+          (*assert (Z.of_nat bi + ni <= Z.of_nat b - m + ⎩ lt ⎭)%Z by lia.
+            admit.  *)
+          (* assert (Z.of_nat b + Z.of_nat (val (valuation_of_labelling lab) l) + ⎩ lt ⎭ <= 
+              Z.of_nat b + ⎩ lt ⎭)%Z by lia.
+          
+          lia.
+          lia.
+          
+          } *)
       apply UnivExprSet_for_all_false in HH.
       apply UnivExprSet.exists_spec in HH; proper.
       unfold UnivExprSet.Exists in *.
@@ -1256,21 +1273,15 @@ Section CheckLeq.
       simpl in HH'.
       unfold univ_le_n. simpl.
       rewrite (val_labelling_of_valuation' v li bi); cbn.
-      rewrite (Hl' _ Hv); clear Hl'.
+      specialize (Hl' _ Hv).
       apply make_graph_spec in Hv; tas. rewrite <- HG in Hv.
       apply (correct_labelling_lsp _ Hnl) in Hv.
       rewrite Hs in Hv; cbn in *.
       pose proof (lsp_from_source G Hnl).
       destruct b. simpl.
       destruct lt. simpl in *.
-      lled; lia.
-      simpl in *. lled; lia.
-      rewrite Nat2Z.inj_succ in HH'.
-      rewrite Z.pred_succ in HH'.
-      destruct lt.
-      simpl in *. rewrite Nat.add_0_r.
-      lled; lia.
-      simpl in *. lled; lia.
+      rewrite Nat2Z.inj_add.
+      transitivity (- m)%Z. lia. admit. admit. admit.
 
     (* case where there is no path from l to Set *)
     - intros HlSet. subst e.
@@ -1421,7 +1432,7 @@ Section CheckLeq.
     unfold univ_le_n; simpl.
     rewrite !val_labelling_of_valuation'.
     destruct b, lt; cbn in *; lled; lia.
-  Qed.
+  Admitted.
 
   Lemma leqb_expr_univ_n_spec lt e1 (u : Universe.t)
         (He1 : gc_expr_declared e1)
