@@ -1,4 +1,5 @@
 From MetaCoq.Template Require Import BasicAst uGraph TemplateMonad TemplateMonad.Extractable.
+From MetaCoq.Template Require Import MCNativeIdent.
 
 (* Base types *)
 
@@ -40,6 +41,12 @@ Register Coq.Init.Datatypes.tt as metacoq.unit.intro.
 Register Coq.Init.Specif.sigT as metacoq.sigma.type.
 Register Coq.Init.Specif.existT as metacoq.sigma.intro.
 Register MetaCoq.Template.TemplateMonad.Common.existT_typed_term as metacoq.sigma.typed_term.
+
+(* Native types *)
+
+Register Coq.Numbers.Cyclic.Int63.Int63.int as metacoq.nstring.i63.type.
+Register MetaCoq.Template.utils.MCNativeIdent.nstring as metacoq.nstring.type.
+Register MetaCoq.Template.utils.MCNativeIdent.MkStr as metacoq.nstring.con.
 
 (* Ast *)
 

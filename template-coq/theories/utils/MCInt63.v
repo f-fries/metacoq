@@ -4,14 +4,18 @@ Require Import Wf_Z BinInt Int63 Arith Lia.
 Open Scope int63_scope.
 Delimit Scope int63_scope with i63.
 
-Definition boundZ x := (0 <= x < wB)%Z.
 
 Section Eliminators.
 
 Local Open Scope Z_scope.
+
 Variable p : int -> Type.
 
+Local Definition boundZ x := (0 <= x < wB)%Z.
+    
 Local Definition q x := p (of_Z x).
+
+(* Hint of_Z_spec *)
 
 Definition int63_rectZ (H0 : q 0) (IH : forall z, boundZ z -> q z -> q (Z.succ z)) : forall x, p x. 
 Proof.
