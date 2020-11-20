@@ -1,5 +1,7 @@
 val declare_inductive : Environ.env -> Evd.evar_map -> Constr.t -> unit
 
+val reduce_all : Environ.env -> Evd.evar_map -> Constr.t -> Constr.t
+
 val run_template_program_rec :
     poly:bool ->
     ?intactic:bool ->

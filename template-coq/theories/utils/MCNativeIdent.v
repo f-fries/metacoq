@@ -5,7 +5,7 @@ Require Import Byte.
 
 Local Definition char_array := array int.
 
-Record nstring := MkStr { from_array : char_array}.
+Inductive nstring := mk_str (_ : char_array).
 
 Declare Scope nstring_scope.
 Delimit Scope nstring_scope with nstr.
@@ -31,7 +31,7 @@ Local Fixpoint str_elemeq n (i : int) (a b : char_array) :=
     | S n => eqb a.[i] b.[i] && str_elemeq n (i + 1) a b
     end.
 
-Definition string_eqb '(MkStr a) '(MkStr b):= 
+Definition string_eqb '(mk_str a) '(mk_str b) := 
     eqb (length a) (length b) 
     && eqb (default a) (default b) 
     && str_elemeq (nat_length a) 0 a b.
@@ -47,16 +47,16 @@ Local Fixpoint copy_from (n : nat) (i k: int) (a b : char_array) :=
             end.
 
 (* TODO: This is not super efficient, since the underlying array is filled with 0s *)
-Definition nstr_concat '(MkStr a) '(MkStr b) :=
+Definition nstr_concat '(mk_str a) '(mk_str b) :=
     let lenA := length a in
     let lenB := length b in
     let arr := make (lenA + lenB) 0 in
     let arr' := copy_from (i63_to_nat lenA) 0 0 a arr in
-    MkStr (copy_from (i63_to_nat lenB) 0 lenA b arr').
+    mk_str (copy_from (i63_to_nat lenB) 0 lenA b arr').
 
 Notation "a ++ b" := (nstr_concat a b) (right associativity, at level 60) : nstring_scope .
 
-Eval vm_compute in (MkStr [| 0; 1; 2; 3 | 0|] ++ MkStr [| 4; 5; 6 | 0 |])%nstr.
+Eval vm_compute in (mk_str [| 0; 1; 2; 3 | 0|] ++ mk_str [| 4; 5; 6 | 0 |])%nstr.
 
 (* Conversions from/to strings *)
 Definition i63_from_byte (b : byte) := 
@@ -165,7 +165,7 @@ Local Definition i63_to_byte_cache : array byte :=
     |].
 Definition i63_to_byte i := i63_to_byte_cache.[i].
 
-Definition to_byte_list '(MkStr a) :=
+Definition to_byte_list '(mk_str a) :=
     (fix go (n : nat) (i : int) (acc : list byte) :=
         match n with
         | 0 => acc
@@ -180,7 +180,7 @@ Local Fixpoint list_length_i63 {A} (xs : list A) :=
 
 Definition from_byte_list (xs : list byte) := 
     let arr := make (list_length_i63 xs) 0 in
-    MkStr ((fix go i xs acc := 
+    mk_str ((fix go i xs acc := 
         match xs with
         | nil => acc
         | cons x xs => go (i + 1) xs (acc.[i <- i63_from_byte x])

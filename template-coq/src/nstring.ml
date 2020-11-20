@@ -4,31 +4,38 @@ open Names
 open Univ
 open Constr_reification.ConstrReification
 
+(* Reify = ML/Ast -> Coq 
+ * Quote = Coq -> ML/Ast
+ *)
+
 let i63_t = resolve "metacoq.nstring.i63.type"
 let str_t = resolve "metacoq.nstring.type"
 let str_make = resolve "metacoq.nstring.make"
 
+let reduce = Run_template_monad.reduce_all
+
+let print_debug (t : Constr.t) =
+    Pp.string_of_ppcmds (Constr.debug_print t)
+
 module Reify = 
 struct
 
-    let i63 i = mkInt (Uint63.of_int i)
+    let i63 (i : int) = mkInt (Uint63.of_int i)
 
-    let chr c = i63 (Char.code c)
+    let chr (c : char) = i63 (Char.code c)
 
-    (* Typing rule for array (u, arr, d, t): 
-     * arr[i] : t, d:t
-     * t : u (i.e u = Set for t = int63)
-     * (See: kernel/typeops.ml)
-     *)
-    let univ = Instance.of_array [| Level.set |]
-        
-    let nstr str =
+    let nstr (str : string) =
         let def = mkInt (Uint63.of_int 0) in
+        (* Typing rule for array (u, arr, d, t):  - See: kernel/typeops.ml
+         * arr[i] : t, d:t
+         * t : u (i.e u = Set for t = int63)
+         *)
+        let univ = Instance.of_array [| Level.set |] in
         let arr = Array.init (String.length str) (fun i -> chr str.[i]) in
         mkApp (Lazy.force str_make, 
             [| mkArray (univ, arr, def, Lazy.force i63_t) |])
 
-    let ident id = nstr (Id.to_string id)
+    let ident (id : Id.t) = nstr (Id.to_string id)
 
 end
 
@@ -36,23 +43,28 @@ module Quote =
 struct
     exception Not_a_nstr of string
 
-    let chr term (* of type int *) = 
-        match kind term with
+    (* Should be sound since term was a char in the first place *)
+    let chr (term : Constr.t) (env : Environ.env) (sigma : Evd.evar_map) = (* of type int *)
+        match kind (reduce env sigma term) with
         | Int uint -> Char.unsafe_chr (Uint63.to_int_min uint 0xff)
         | _ -> raise (Not_a_nstr "array element not an int")
 
-    let nstr term (* of type nstr *) = 
-        match kind term with
+    (* term must be normalised or the pattern matching
+     * will not work. reduce will not normalise the array elements
+     *)
+    let nstr (term : Constr.t) (env : Environ.env) (sigma : Evd.evar_map) = 
+        match kind (reduce env sigma term) with
         | App (hd, body) when equal hd (Lazy.force str_make) ->
-                begin match kind term with
+                begin match kind body.(0) with
                 | Array (_, arr, _, _) ->
-                        String.init (Array.length arr) (fun i -> chr arr.(i))
-                | _ -> raise (Not_a_nstr "Argument of 'MkStr' is not an array")
+                        String.init (Array.length arr) (fun i -> chr arr.(i) env sigma)
+                | _ -> raise (Not_a_nstr 
+                            (String.concat "Argument of 'MkStr' is not an array" [print_debug body.(0)]))
                 end
         | _ -> raise (Not_a_nstr "Not a application of 'MkStr'")
 
-    let ident term (* of type nstr *) = 
-        Id.of_string (nstr term)
+    let ident (term : Constr.t) (env : Environ.env) (sigma : Evd.evar_map) = (* of type nstr *)
+        Id.of_string (nstr term env sigma)
 end
 
 module Test = 
@@ -66,4 +78,5 @@ struct
             ~typ:(Some (EConstr.of_constr (Lazy.force str_t))) () in
         let info = Declare.Info.make ~poly:false ~kind:(Decls.IsDefinition Decls.Definition) () in
         ignore (Declare.declare_definition ~cinfo ~info ~opaque:false ~body sigma)
+
 end
