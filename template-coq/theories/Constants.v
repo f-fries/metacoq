@@ -46,7 +46,7 @@ Register MetaCoq.Template.TemplateMonad.Common.existT_typed_term as metacoq.sigm
 
 Register Coq.Numbers.Cyclic.Int63.Int63.int as metacoq.nstring.i63.type.
 Register MetaCoq.Template.utils.MCNativeIdent.nstring as metacoq.nstring.type.
-Register MetaCoq.Template.utils.MCNativeIdent.MkStr as metacoq.nstring.con.
+Register MetaCoq.Template.utils.MCNativeIdent.MkStr as metacoq.nstring.make.
 
 (* Ast *)
 

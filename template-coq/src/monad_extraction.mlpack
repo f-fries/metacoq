@@ -15,7 +15,7 @@ Common
 Datatypes
 Decimal
 Hexadecimal
-Numeral
+Numeral0
 Equalities
 Extractable
 List0
@@ -31,10 +31,6 @@ OrdersTac
 PeanoNat
 Specif
 String0
-
-
-
-
 
 Tm_util
 Quoter

@@ -97,11 +97,11 @@ VERNAC COMMAND EXTEND TemplateCoq_Quote_Definition CLASSIFIED AS SIDEFF STATE pr
         run_template_program env evm ~poly pgm }
 END
 
-(*
-VERNAC COMMAND EXTEND TemplateCoq_Quote_Nident_Test CLASSIFIED AS SIDEFF STATE program
-    | #[ poly = polymorphic] ["MetaCoq" "nident" ident(name) ":=" ident(str) ] -> { }
+VERNAC COMMAND EXTEND TemplateCoq_Quote_Nident_Test CLASSIFIED AS SIDEFF
+    | #[ poly = polymorphic] ["MetaCoq" "nident" ident(name) ":=" ident(str) ] ->
+    {
+        Nstring.Test.define_id name str }
 END
-*)
 
 VERNAC COMMAND EXTEND TemplateCoq_Quote_Definition_Eval CLASSIFIED AS SIDEFF STATE program
   | #[ poly = polymorphic ] [ "MetaCoq" "Quote" "Definition" ident(name) ":=" "Eval" red_expr(rd) "in" constr(def) ] ->
