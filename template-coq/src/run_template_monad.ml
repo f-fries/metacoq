@@ -11,10 +11,8 @@ open Constr_quoter
 open Constr_denoter
 open Template_monad
 
-
 let reduce_all env evm trm =
   EConstr.to_constr evm (Reductionops.nf_all env evm (EConstr.of_constr trm))
-
 
 let unquote_reduction_strategy env evm trm (* of type reductionStrategy *) : Redexpr.red_expr =
   let (trm, args) = app_full trm [] in
@@ -230,7 +228,7 @@ let denote_decl evm d =
 
 let denote_context evm ctx =
   map_evm denote_decl evm (unquote_list ctx)
-  
+
 let unquote_mutual_inductive_entry evm trm (* of type mutual_inductive_entry *) : _ * Entries.mutual_inductive_entry =
   let (h,args) = app_full trm [] in
   if constr_equall h tBuild_mutual_inductive_entry then

@@ -18,4 +18,5 @@ end
 module Test :
 sig
     val define_id : Id.t -> Id.t -> unit
+    val print_id : Constrexpr.constr_expr -> pm:Plugin_core.coq_state -> Plugin_core.coq_state
 end

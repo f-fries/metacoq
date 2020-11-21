@@ -12,7 +12,6 @@ let i63_t = resolve "metacoq.nstring.i63.type"
 let str_t = resolve "metacoq.nstring.type"
 let str_make = resolve "metacoq.nstring.make"
 
-let reduce = Run_template_monad.reduce_all
 
 let print_debug (t : Constr.t) =
     Pp.string_of_ppcmds (Constr.debug_print t)
@@ -41,6 +40,9 @@ end
 
 module Quote =
 struct
+    let reduce = 
+        Run_template_monad.reduce_all
+
     exception Not_a_nstr of string
 
     (* Should be sound since term was a char in the first place *)
@@ -69,6 +71,9 @@ end
 
 module Test = 
 struct
+    
+    let run_pgm ~pm env sigma pgm =
+        Run_template_monad.run_template_program_rec ~poly:false (fun ~st _ _ _ -> st) ~st:pm env (sigma, pgm)
 
     let define_id (name : Id.t) (str : Id.t) =
         let env = Global.env () in
@@ -79,4 +84,14 @@ struct
         let info = Declare.Info.make ~poly:false ~kind:(Decls.IsDefinition Decls.Definition) () in
         ignore (Declare.declare_definition ~cinfo ~info ~opaque:false ~body sigma)
 
+    let print_id (ident : Constrexpr.constr_expr) =
+            let env = Global.env () in
+            let sigma = Evd.from_env env in
+            let (sigma, ident) = Constrintern.interp_open_constr env sigma ident in
+            let ident = EConstr.to_constr sigma ident in
+            let ident = Run_template_monad.reduce_all env sigma ident in
+            let ident = Constr.mkVar (Quote.ident ident env sigma) in
+            let (sigma, mqPrint) = EConstr.fresh_global env sigma (Lazy.force Template_monad.ptmPrint) in
+            let pgm = Constr.mkApp ((EConstr.to_constr sigma mqPrint), [| Constr.mkSet; ident |]) in
+            run_pgm env sigma pgm
 end
