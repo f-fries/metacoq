@@ -2,6 +2,7 @@
 Require Import Array.PArray BinInt Bool.
 Require Import Int63. 
 Require Import Byte.
+Require String.
 
 Local Definition char_array := array int.
 
@@ -31,13 +32,13 @@ Local Fixpoint str_elemeq n (i : int) (a b : char_array) :=
     | S n => eqb a.[i] b.[i] && str_elemeq n (i + 1) a b
     end.
 
-Definition string_eqb '(mk_str a) '(mk_str b) := 
+Definition nstring_eqb '(mk_str a) '(mk_str b) := 
     eqb (length a) (length b) 
     && eqb (default a) (default b) 
     && str_elemeq (nat_length a) 0 a b.
 
-Axiom string_eqb_correct:
-        forall a b, string_eqb a b = true <-> a = b.
+Axiom nstring_eqb_correct:
+        forall a b, nstring_eqb a b = true <-> a = b.
 
 (* Concatenation *)
 Local Fixpoint copy_from (n : nat) (i k: int) (a b : char_array) :=
@@ -58,7 +59,7 @@ Notation "a ++ b" := (nstr_concat a b) (right associativity, at level 60) : nstr
 
 Eval vm_compute in (mk_str [| 0; 1; 2; 3 | 0|] ++ mk_str [| 4; 5; 6 | 0 |])%nstr.
 
-(* Conversions from/to strings *)
+(* Conversions from/to byte lists. This can/will be used to define string notations *)
 Definition i63_from_byte (b : byte) := 
     match b with
     | x00 => 0x00 | x01 => 0x01 | x02 => 0x02 | x03 => 0x03
@@ -198,6 +199,53 @@ String Notation BoxedList MkBoxedList unBoxList : nstring_scope.
 Definition make x :=  from_byte_list (unBoxList x).
 Arguments make _%nstr.
 
+(* Conversion to Ascii based string, this is used for compatibility *)
+Definition i63_get_bit x i :=
+    if is_zero (x land (1 << i)) then false else true.
+
+Definition i63_to_ascii x := 
+    Ascii.Ascii 
+        (i63_get_bit x 0)
+        (i63_get_bit x 1)
+        (i63_get_bit x 2)
+        (i63_get_bit x 3)
+        (i63_get_bit x 4)
+        (i63_get_bit x 5)
+        (i63_get_bit x 6)
+        (i63_get_bit x 7).
+
+Definition nstring_to_string '(mk_str s) :=
+    (fix go n i := 
+        match n with 
+        | 0 => String.EmptyString
+        | S n => String.String (i63_to_ascii s.[i]) (go n (i + 1))
+        end) (nat_length s) 0.
 
 
-        
+(* Conversions from nat and int *)
+(* We have x <= 2^63 < 10^(max_pos + 1) *)
+Local Definition max_pos : nat := 18.
+
+Local Definition mk_digit x : int := x + 48.
+
+Local Fixpoint highest_nonzero_pos (n : nat) (m x : int) : nat :=
+    match n with
+    | 0 => 0
+    | S k => if m <= x then highest_nonzero_pos k (m * 10) x else S (max_pos - n)
+    end.
+
+Compute highest_nonzero_pos max_pos 10 0.
+Compute highest_nonzero_pos max_pos 10 1444.
+
+Definition i63_to_nstring x := 
+    let len := highest_nonzero_pos max_pos 10 x in
+    let arr := PArray.make (nat_to_i63 len) 0 in
+    mk_str ((fix go n i x arr := 
+        match n with
+        | 0 => arr
+        | S n => 
+            let d := mk_digit (x \% 10) in go n (i - 1) (x / 10) arr.[i <- d]
+        end) len (length arr - 1) x arr).
+
+Definition nat_to_nstring n := i63_to_nstring (nat_to_i63 n).
+Compute (i63_to_nstring 9876543).
