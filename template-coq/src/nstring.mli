@@ -1,5 +1,8 @@
 open Names
 
+val str_t : Constr.t Lazy.t
+val i63_t : Constr.t Lazy.t
+
 module Reify : 
 sig
     val i63 : int -> Constr.t
@@ -15,8 +18,10 @@ sig
     val ident : Constr.t -> Id.t
 end
 
-module Test :
-sig
-    val define_id : Id.t -> Id.t -> unit
-    val print_id : Constrexpr.constr_expr -> pm:Plugin_core.coq_state -> Plugin_core.coq_state
-end
+(*
+ * module Test :
+ * sig
+ *     val define_id : Id.t -> Id.t -> unit
+ *     val print_id : Constrexpr.constr_expr -> pm:Plugin_core.coq_state -> Plugin_core.coq_state
+ * end
+ *)
