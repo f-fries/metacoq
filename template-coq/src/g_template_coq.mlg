@@ -100,21 +100,36 @@ END
 (* nstring *)
 VERNAC COMMAND EXTEND TemplateCoq_Nstr_Test_Reify CLASSIFIED AS SIDEFF
     | ["MetaCoq" "nident" ident(name) ":=" ident(str) ] ->
-    {
-        Nstring.Test.define_id name str }
-END
-
-VERNAC COMMAND EXTEND TemplateCoq_Print_Def CLASSIFIED AS QUERY
-    | [ "MetaCoq" "debug" "ast" constr(term) ] ->
-        {   let (env, sigma) = fresh_env () in
-            let (sigma, term) = Constrintern.interp_open_constr env sigma term in
-            let term = EConstr.to_constr sigma term in
-            Tm_util.debug (fun _ -> Constr.debug_print term) }
+    {   let env = Global.env () in
+        let sigma = Evd.from_env env in
+        let body = EConstr.of_constr (Nstring.Reify.ident str) in
+        let cinfo = Declare.CInfo.make ~name:name 
+            ~typ:(Some (EConstr.of_constr (Lazy.force Nstring.str_t))) () in
+        let info = Declare.Info.make ~poly:false ~kind:(Decls.IsDefinition Decls.Definition) () in
+        ignore (Declare.declare_definition ~cinfo ~info ~opaque:false ~body sigma) }
 END
 
 VERNAC COMMAND EXTEND TemplateCoq_Nstr_Test_Quote CLASSIFIED AS SIDEFF STATE program
-    | [ "MetaCoq" "nident" "about" constr(ident) ] ->
-    { Nstring.Test.print_id ident }
+| [ "MetaCoq" "nident" "about" constr(ident) ] ->
+    {  let run_pgm ~pm env sigma pgm =
+            Run_template_monad.run_template_program_rec ~poly:false (fun ~st _ _ _ -> st) ~st:pm env (sigma, pgm) in
+        let env = Global.env () in
+        let sigma = Evd.from_env env in
+        let (sigma, ident) = Constrintern.interp_open_constr env sigma ident in
+        let ident = EConstr.to_constr sigma ident in
+        let ident = Run_template_monad.reduce_all env sigma ident in
+        let ident = Constr.mkVar (Nstring.Quote.ident ident) in
+        let (sigma, mqPrint) = EConstr.fresh_global env sigma (Lazy.force Template_monad.ptmPrint) in
+        let pgm = Constr.mkApp ((EConstr.to_constr sigma mqPrint), [| Constr.mkSet; ident |]) in
+        run_pgm env sigma pgm }
+END
+
+VERNAC COMMAND EXTEND TemplateCoq_Print_Def CLASSIFIED AS QUERY
+| [ "MetaCoq" "debug" "ast" constr(term) ] ->
+    { let (env, sigma) = fresh_env () in
+      let (sigma, term) = Constrintern.interp_open_constr env sigma term in
+      let term = EConstr.to_constr sigma term in
+      Tm_util.bad_term_verb term "" } 
 END
 
 VERNAC COMMAND EXTEND TemplateCoq_Quote_Definition_Eval CLASSIFIED AS SIDEFF STATE program
