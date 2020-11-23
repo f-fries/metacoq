@@ -32,15 +32,19 @@ Local Open Scope string_scope.
     - GlobRef.t => global_reference
 *)
 
-Definition ident   := string. (* e.g. nat *)
-Definition qualid  := string. (* e.g. Datatypes.nat *)
+Definition ident   := nstring. (* e.g. nat *)
+Definition qualid  := nstring. (* e.g. Datatypes.nat *)
+
+Definition string_of_ident := nstring_to_string.
+Definition string_of_qualid := nstring_to_string.
+
 
 (** Type of directory paths. Essentially a list of module identifiers. The
     order is reversed to improve sharing. E.g. A.B.C is ["C";"B";"A"] *)
 Definition dirpath := list ident.
 
 Definition string_of_dirpath : dirpath -> string
-  := String.concat "." ∘ rev.
+  := String.concat "." ∘ map string_of_ident ∘ rev.
 
 (** The module part of the kernel name.
     - MPfile is for toplevel libraries, i.e. .vo files
@@ -55,15 +59,15 @@ Inductive modpath :=
 Fixpoint string_of_modpath (mp : modpath) : string :=
   match mp with
   | MPfile dp => string_of_dirpath dp
-  | MPbound dp id _ => string_of_dirpath dp ++ "." ++ id
-  | MPdot mp id => string_of_modpath mp ++ "." ++ id
+  | MPbound dp id _ => string_of_dirpath dp ++ "." ++ string_of_ident id
+  | MPdot mp id => string_of_modpath mp ++ "." ++ string_of_ident id
   end.
 
 (** The absolute names of objects seen by kernel *)
 Definition kername := modpath × ident.
 
 Definition string_of_kername (kn : kername) :=
-  string_of_modpath kn.1 ++ "." ++ kn.2.
+  string_of_modpath kn.1 ++ "." ++ string_of_ident kn.2.
 
 
 (** Identifiers that are allowed to be anonymous (i.e. "_" in concrete syntax). *)
@@ -74,7 +78,7 @@ Inductive name : Set :=
 Definition string_of_name (na : name) :=
   match na with
   | nAnon => "_"
-  | nNamed n => n
+  | nNamed n => string_of_ident n
   end.
 
 (** Designation of a (particular) inductive type. *)
@@ -97,7 +101,7 @@ Inductive global_reference :=
 
 Definition string_of_gref gr : string :=
   match gr with
-  | VarRef v => v
+  | VarRef v => string_of_ident v
   | ConstRef s => string_of_kername s
   | IndRef (mkInd s n) =>
     "Inductive " ++ string_of_kername s ++ " " ++ (string_of_nat n)
@@ -105,6 +109,7 @@ Definition string_of_gref gr : string :=
     "Constructor " ++ string_of_kername s ++ " " ++ (string_of_nat n) ++ " " ++ (string_of_nat k)
   end.
 
+(*
 Definition kername_eq_dec (k k0 : kername) : {k = k0} + {k <> k0}.
 Proof.
   repeat (decide equality; eauto with eq_dec).
@@ -119,13 +124,11 @@ Proof.
   destruct i, i0.
   decide equality; eauto with eq_dec.
 Defined.
+*)
 
-Definition ident_eq (x y : ident) :=
-  match string_compare x y with
-  | Eq => true
-  | _ => false
-  end.
+Definition ident_eq := nstring_eqb.
 
+(*
 Lemma ident_eq_spec x y : reflect (x = y) (ident_eq x y).
 Proof.
   unfold ident_eq. destruct (string_compare_eq x y).
@@ -133,19 +136,40 @@ Proof.
   intro Heq; specialize (H0 Heq). discriminate.
   intro Heq; specialize (H0 Heq). discriminate.
 Qed.
+*)
 
-(* todo : better ? *)
-Definition eq_kername (k k0 : kername) : bool :=
-  match kername_eq_dec k k0 with
-  | left _ => true
-  | right _ => false
+Fixpoint list_eq {A} (eq : A -> A -> bool) xs ys := 
+  match xs, ys with
+  | nil, nil => true
+  | x::xs, y::ys => eq x y && list_eq eq xs ys
+  | _, _ => false
   end.
 
+Definition dirpath_eq : dirpath -> dirpath -> bool := list_eq ident_eq.
+
+Fixpoint modpath_eq mp1 mp2 :=
+  match mp1, mp2 with
+  | MPfile d1, MPfile d2 => 
+      dirpath_eq d1 d2
+  | MPbound d1 i1 n1, MPbound d2 i2 n2 => 
+      dirpath_eq d1 d2 && ident_eq i1 i2 && Nat.eqb n1 n2
+  | MPdot mp1 i1, MPdot mp2 i2 =>
+      modpath_eq mp1 mp2 && ident_eq i1 i2
+  | _, _ => false
+  end.
+
+Definition eq_kername (k0 k1 : kername) : bool :=
+  let (mp0, i0) := k0 in
+  let (mp1, i1) := k1 in
+  nstring_eqb i0 i1 && modpath_eq mp0 mp1.
+
+(*
 Lemma eq_kername_refl kn : eq_kername kn kn.
 Proof.
   unfold eq_kername. destruct (kername_eq_dec kn kn); cbnr.
   contradiction.
 Qed.
+*)
 
 Definition eq_inductive i i' :=
   let 'mkInd i n := i in
@@ -159,6 +183,7 @@ Definition eq_projection p p' :=
   let '(ind', pars', arg') := p' in
   eq_inductive ind ind' && Nat.eqb pars pars' && Nat.eqb arg arg'.
 
+(*
 Lemma eq_inductive_refl i : eq_inductive i i.
 Proof.
   destruct i as [mind k].
@@ -171,7 +196,7 @@ Proof.
   unfold eq_projection.
   now rewrite eq_inductive_refl, !PeanoNat.Nat.eqb_refl.
 Qed.
-
+*)
 
 
 (** The kind of a cast *)

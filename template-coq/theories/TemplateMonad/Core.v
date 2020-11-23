@@ -1,7 +1,7 @@
 From Coq Require Import Strings.String List.
 Import ListNotations.
 Open Scope string_scope.
-From MetaCoq.Template Require Import Ast AstUtils Common.
+From MetaCoq.Template Require Import Ast AstUtils Common utils.
 
 Set Universe Polymorphism.
 Set Universe Minimization ToSet.
@@ -99,7 +99,7 @@ Definition tmQuoteRec {A} (a : A) := tmQuoteRecTransp a true.
 Definition tmLocate1 (q : qualid) : TemplateMonad global_reference :=
   l <- tmLocate q ;;
   match l with
-  | [] => tmFail ("Constant [" ++ q ++ "] not found")
+  | [] => tmFail ("Constant [" ++ string_of_qualid q ++ "] not found")
   | x :: _ => tmReturn x
   end.
 
@@ -107,10 +107,11 @@ Definition tmLocate1 (q : qualid) : TemplateMonad global_reference :=
 Definition tmTestQuote {A} (t : A) := tmQuote t >>= tmPrint.
 
 Definition Common_kn (s : ident) :=
-  (MPfile ["Common"; "TemplateMonad"; "Template"; "MetaCoq"], s).
+  (MPfile [make "Common"; make "TemplateMonad"; make "Template"; make "MetaCoq"], s).
+
 Definition tmTestUnquote (t : term) :=
      t' <- tmUnquote t ;;
-     t'' <- tmEval (unfold (Common_kn "my_projT2")) (my_projT2 t') ;;
+     t'' <- tmEval (unfold (Common_kn (make "my_projT2"))) (my_projT2 t') ;;
      tmPrint t''.
 
 Definition tmQuoteDefinition id {A} (t : A) := tmQuote t >>= tmDefinition id.
@@ -121,6 +122,6 @@ Definition tmQuoteRecDefinition id {A} (t : A)
 
 Definition tmMkDefinition (id : ident) (tm : term) : TemplateMonad unit
   := t' <- tmUnquote tm ;;
-     t'' <- tmEval (unfold (Common_kn "my_projT2")) (my_projT2 t') ;;
-     tmDefinitionRed id (Some (unfold (Common_kn "my_projT1"))) t'' ;;
+     t'' <- tmEval (unfold (Common_kn (make "my_projT2"))) (my_projT2 t') ;;
+     tmDefinitionRed id (Some (unfold (Common_kn (make "my_projT1")))) t'' ;;
      tmReturn tt.

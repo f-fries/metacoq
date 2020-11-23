@@ -1,5 +1,6 @@
 (* Distributed under the terms of the MIT license.   *)
 
+(*
 From Coq Require Import Bool List Arith Lia ssreflect.
 From Coq Require Import String Wellfounded Relation_Operators.
 
@@ -1685,3 +1686,4 @@ Defined.
 
 Definition wf_ext_wf `{checker_flags} Σ : wf_ext Σ -> wf Σ.1 := fst.
 Hint Immediate wf_ext_wf : core.
+*)

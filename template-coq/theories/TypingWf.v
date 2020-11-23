@@ -1,5 +1,6 @@
 (* Distributed under the terms of the MIT license.   *)
 
+(*
 From Coq Require Import Bool String List Arith Lia.
 From MetaCoq.Template Require Import config utils Ast AstUtils Induction LiftSubst
      UnivSubst Typing.
@@ -793,3 +794,4 @@ Proof.
   eapply All_Forall, Alli_All; eauto. simpl; intros.
   eapply declared_projection_wf in H0; eauto.
 Qed.
+*)

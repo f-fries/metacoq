@@ -15,12 +15,14 @@ Local Open Scope int63_scope.
 Local Open Scope array_scope.
 
 Definition i63_to_nat x := Z.to_nat (Int63.to_Z x).
+Arguments i63_to_nat _%int63_scope.
 
 Fixpoint nat_to_i63 n := 
     match n with
     | S n => 1 + nat_to_i63 n
     | 0 => 0
     end.
+Arguments nat_to_i63 _%int63_scope.
 
 Local Definition nat_length (x : char_array) := i63_to_nat (length x).
 About nstring.
@@ -36,9 +38,16 @@ Definition nstring_eqb '(mk_str a) '(mk_str b) :=
     eqb (length a) (length b) 
     && eqb (default a) (default b) 
     && str_elemeq (nat_length a) 0 a b.
+Arguments nstring_eqb _%nstr _%nstr.
 
 Axiom nstring_eqb_correct:
         forall a b, nstring_eqb a b = true <-> a = b.
+
+Definition nstring_eqdec (x y : nstring) : {x = y} + {x <> y}.
+Proof. destruct (nstring_eqb_correct x y) as [H1 H2]. destruct (nstring_eqb x y); auto.
+    right. intros H3 % H2. congruence.
+Defined.
+
 
 (* Concatenation *)
 Local Fixpoint copy_from (n : nat) (i k: int) (a b : char_array) :=
@@ -54,10 +63,18 @@ Definition nstr_concat '(mk_str a) '(mk_str b) :=
     let arr := make (lenA + lenB) 0 in
     let arr' := copy_from (i63_to_nat lenA) 0 0 a arr in
     mk_str (copy_from (i63_to_nat lenB) 0 lenA b arr').
+Arguments nstr_concat _%nstr _%nstr.
 
 Notation "a ++ b" := (nstr_concat a b) (right associativity, at level 60) : nstring_scope .
 
+Definition slice '(mk_str A) k := 
+    let sz := if length A <= k then length A - 1 else k in
+    let B := PArray.make sz 0 in
+    mk_str (copy_from (i63_to_nat sz) 0 0 A B).
+Arguments slice _%nstr _%int63_scope.
+
 Eval vm_compute in (mk_str [| 0; 1; 2; 3 | 0|] ++ mk_str [| 4; 5; 6 | 0 |])%nstr.
+Eval vm_compute in slice (mk_str [| 0; 1; 2; 3; 4; 5  | 0 |]) 3.
 
 (* Conversions from/to byte lists. This can/will be used to define string notations *)
 Definition i63_from_byte (b : byte) := 
@@ -165,6 +182,7 @@ Local Definition i63_to_byte_cache : array byte :=
         xf8;  xf9; xfa; xfb; xfc; xfd; xfe; xff | x00 
     |].
 Definition i63_to_byte i := i63_to_byte_cache.[i].
+Arguments i63_to_byte _%int63_scope.
 
 Definition to_byte_list '(mk_str a) :=
     (fix go (n : nat) (i : int) (acc : list byte) :=
@@ -172,6 +190,7 @@ Definition to_byte_list '(mk_str a) :=
         | 0 => acc
         | S n => go n (i - 1) (cons (i63_to_byte a.[i]) acc)
         end) (nat_length a) (length a - 1) nil.
+Arguments to_byte_list _%nstr.
 
 Local Fixpoint list_length_i63 {A} (xs : list A) := 
             match xs with
@@ -199,9 +218,14 @@ String Notation BoxedList MkBoxedList unBoxList : nstring_scope.
 Definition make x :=  from_byte_list (unBoxList x).
 Arguments make _%nstr.
 
+Definition readable x := MkBoxedList (to_byte_list x).
+Arguments make _%nstr.
+
+
 (* Conversion to Ascii based string, this is used for compatibility *)
 Definition i63_get_bit x i :=
     if is_zero (x land (1 << i)) then false else true.
+Arguments i63_get_bit _%int63_scope _%int63_scope.
 
 Definition i63_to_ascii x := 
     Ascii.Ascii 
@@ -220,9 +244,11 @@ Definition nstring_to_string '(mk_str s) :=
         | 0 => String.EmptyString
         | S n => String.String (i63_to_ascii s.[i]) (go n (i + 1))
         end) (nat_length s) 0.
+Arguments nstring_to_string _%nstr.
 
 
 (* Conversions from nat and int *)
+
 (* We have x <= 2^63 < 10^(max_pos + 1) *)
 Local Definition max_pos : nat := 18.
 
@@ -244,8 +270,10 @@ Definition i63_to_nstring x :=
         match n with
         | 0 => arr
         | S n => 
-            let d := mk_digit (x \% 10) in go n (i - 1) (x / 10) arr.[i <- d]
+            let d := mk_digit (x \% 10) in 
+            go n (i - 1) (x / 10) arr.[i <- d]
         end) len (length arr - 1) x arr).
+Arguments i63_to_nstring _%int63_scope.
 
 Definition nat_to_nstring n := i63_to_nstring (nat_to_i63 n).
-Compute (i63_to_nstring 9876543).
+Compute readable (i63_to_nstring 9876543).

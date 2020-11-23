@@ -11,7 +11,7 @@ Set Asymmetric Patterns.
 Fixpoint string_of_term (t : term) :=
   match t with
   | tRel n => "Rel(" ++ string_of_nat n ++ ")"
-  | tVar n => "Var(" ++ n ++ ")"
+  | tVar n => "Var(" ++ string_of_ident n ++ ")"
   | tEvar ev args => "Evar(" ++ string_of_nat ev ++ "," ++ string_of_list string_of_term args ++ ")"
   | tSort s => "Sort(" ++ string_of_sort s ++ ")"
   | tCast c k t => "Cast(" ++ string_of_term c ++ (* TODO *) ","

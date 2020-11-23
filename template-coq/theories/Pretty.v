@@ -4,7 +4,6 @@ From Coq Require Import List BinPos String.
 From MetaCoq Require Import utils Ast AstUtils LiftSubst Universes.
 
 (** Pretty printing *)
-
 Section print_term.
   Context (Σ : global_env_ext).
 
@@ -56,29 +55,31 @@ Section print_term.
     | _ => None
     end.
 
-  Fixpoint name_from_term (t : term) :=
+  Local Open Scope nstring_scope.
+
+  Fixpoint name_from_term (t : term) : ident :=
     match t with
-    | tRel _ | tVar _ | tEvar _ _ => "H"
-    | tSort s => "X"
-    | tProd na b t => "f"
-    | tLambda na b t => "f"
+    | tRel _ | tVar _ | tEvar _ _ => make "H"
+    | tSort s => make "X"
+    | tProd na b t => make "f"
+    | tLambda na b t => make "f"
     | tLetIn na b _ t' => name_from_term t'
     | tApp f _ => name_from_term f
-    | tConst c u => "x"
+    | tConst c u => make "x"
     | tInd (mkInd i k) u =>
       match lookup_ind_decl i k with
-      | Some body => substring 0 1 (body.(ind_name))
-      | None => "X"
+      | Some body => slice body.(ind_name) (nat_to_i63 1) (* TODO: Fix this :( *)
+      | None => make "X"
       end
-    | _ => "U"
+    | _ => make "U"
     end.
 
-  Definition fresh_id_from Γ n id :=
+  Definition fresh_id_from Γ n id : ident :=
     let fix aux i :=
       match i with
       | 0 => id
       | S i' =>
-        let id' := id ++ string_of_nat (n - i) in
+        let id' := id ++ nat_to_nstring (n - i) in
         if is_fresh Γ id' then id'
         else aux i'
       end
@@ -93,6 +94,11 @@ Section print_term.
     if is_fresh Γ id then nNamed id
     else nNamed (fresh_id_from Γ 10 id).
 
+  Close Scope nstring_scope.
+
+  Check combine.
+  Check ind_ctors.
+
   Fixpoint print_term (Γ : context) (top : bool) (t : term) {struct t} :=
   match t with
   | tRel n =>
@@ -100,11 +106,11 @@ Section print_term.
     | Some {| decl_name := na |} =>
       match na with
       | nAnon => "Anonymous (" ++ string_of_nat n ++ ")"
-      | nNamed id => id
+      | nNamed id => string_of_ident id
       end
     | None => "UnboundRel(" ++ string_of_nat n ++ ")"
     end
-  | tVar n => "Var(" ++ n ++ ")"
+  | tVar n => "Var(" ++ string_of_ident n ++ ")"
   | tEvar ev args => "Evar(" ++ string_of_nat ev ++ "[]" (* TODO *)  ++ ")"
   | tSort s => string_of_sort s
   | tCast c k t => parens top (print_term Γ true c ++ ":"  ++ print_term Γ true t)
@@ -127,7 +133,7 @@ Section print_term.
   | tConst c u => string_of_kername c ++ print_universe_instance u
   | tInd (mkInd i k) u =>
     match lookup_ind_decl i k with
-    | Some oib => oib.(ind_name) ++ print_universe_instance u
+    | Some oib => string_of_ident oib.(ind_name) ++ print_universe_instance u
     | None =>
       "UnboundInd(" ++ string_of_inductive (mkInd i k) ++ "," ++ string_of_universe_instance u ++ ")"
     end
@@ -135,7 +141,7 @@ Section print_term.
     match lookup_ind_decl i k with
     | Some oib =>
       match nth_error oib.(ind_ctors) l with
-      | Some (na, _, _) => na ++ print_universe_instance u
+      | Some (na, _, _) => string_of_ident na ++ print_universe_instance u
       | None =>
         "UnboundConstruct(" ++ string_of_inductive ind ++ "," ++ string_of_nat l ++ ","
                             ++ string_of_universe_instance u ++ ")"
@@ -163,10 +169,10 @@ Section print_term.
         in
         let brs := map (fun '(arity, br) =>
                           print_branch Γ arity br) brs in
-        let brs := combine brs oib.(ind_ctors) in
+        let brs := combine brs (map (fun '((i, t), n) => ((string_of_ident i, t), n)) oib.(ind_ctors)) in
         parens top ("match " ++ print_term Γ true t ++
                     " as " ++ string_of_name na ++
-                    " in " ++ oib.(ind_name) ++ " return " ++ print_term Γ true b ++
+                    " in " ++ string_of_ident oib.(ind_name) ++ " return " ++ print_term Γ true b ++
                     " with " ++ nl ++
                     print_list (fun '(b, (na, _, _)) => na ++ " " ++ b)
                     (nl ++ " | ") brs ++ nl ++ "end" ++ nl)
@@ -182,7 +188,7 @@ Section print_term.
     match lookup_ind_decl mind i with
     | Some oib =>
       match nth_error oib.(ind_projs) k with
-      | Some (na, _) => print_term Γ false c ++ ".(" ++ na ++ ")"
+      | Some (na, _) => print_term Γ false c ++ ".(" ++ string_of_ident na ++ ")"
       | None =>
         "UnboundProj(" ++ string_of_inductive ind ++ "," ++ string_of_nat i ++ "," ++ string_of_nat k ++ ","
                        ++ print_term Γ true c ++ ")"

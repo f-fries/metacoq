@@ -5,6 +5,7 @@
 *)
 
 (* From MetaCoq Require All. *)
+(*)
 Require Import MetaCoq.Template.utils MetaCoq.Template.Ast.
 Require Import FSets.
 Require Import ExtrOcamlBasic.
@@ -37,3 +38,4 @@ Extraction Library Pretty.
 Extraction Library config.
 
 Cd "..".
+*)
