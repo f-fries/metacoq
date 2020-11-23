@@ -12,6 +12,11 @@ let i63_t = resolve "metacoq.nstring.i63.type"
 let str_t = resolve "metacoq.nstring.type"
 let str_make = resolve "metacoq.nstring.make"
 
+let withCurEnv (f : Environ.env -> Evd.evar_map -> 'a) : 'a =
+    let env = Global.env () in
+    let sigma = Evd.from_env env in
+    f env sigma
+
 module Reify = 
 struct
 
@@ -43,10 +48,14 @@ struct
     exception Not_a_nstr of string
 
     (* Should be sound since term was a char in the first place *)
-    let chr (term : Constr.t) (env : Environ.env) (sigma : Evd.evar_map) = (* of type int *)
+    let chr_aux (term : Constr.t) (env : Environ.env) (sigma : Evd.evar_map) =
         match kind (reduce env sigma term) with
         | Int uint -> Char.unsafe_chr (Uint63.to_int_min uint 0xff)
         | _ -> raise (Not_a_nstr "array element not an int")
+
+    let chr (term : Constr.t) =
+        try withCurEnv (chr_aux term) with
+        | Not_a_nstr _ -> Tm_util.bad_term_verb term " is not a primitive integer"
 
     (* term must be normalised or the pattern matching
      * will not work. reduce will not normalise the array elements
@@ -56,15 +65,13 @@ struct
         | App (hd, body) when equal hd (Lazy.force str_make) ->
                 begin match kind body.(0) with
                 | Array (_, arr, _, _) ->
-                        String.init (Array.length arr) (fun i -> chr arr.(i) env sigma)
-                | _ -> raise (Not_a_nstr "Argument of 'MkStr' is not an array")
+                        String.init (Array.length arr) (fun i -> chr_aux arr.(i) env sigma)
+                | _ -> raise (Not_a_nstr "'mk_str' must be applied to an array")
                 end
-        | _ -> raise (Not_a_nstr "Not a application of 'MkStr'")
+        | _ -> raise (Not_a_nstr "Not a application of 'mk_str'")
 
-    let nstr (term : Constr.t) =
-        let env = Global.env () in
-        let sigma = Evd.from_env env in
-        try nstr_aux term env sigma with
+    let nstr (term : Constr.t) (* of type nstring *) =
+        try withCurEnv (nstr_aux term) with
         | Not_a_nstr msg -> Tm_util.bad_term_verb term msg
 
     let ident (term : Constr.t) (* of type ident *) =

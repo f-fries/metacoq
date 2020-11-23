@@ -10,7 +10,7 @@ end
 
 module Quote :
 sig
-    val chr : Constr.t -> Environ.env -> Evd.evar_map -> char
+    val chr : Constr.t -> char
     val nstr : Constr.t -> string
     val ident : Constr.t -> Id.t
 end
