@@ -12,10 +12,6 @@ let i63_t = resolve "metacoq.nstring.i63.type"
 let str_t = resolve "metacoq.nstring.type"
 let str_make = resolve "metacoq.nstring.make"
 
-
-let print_debug (t : Constr.t) =
-    Pp.string_of_ppcmds (Constr.debug_print t)
-
 module Reify = 
 struct
 
@@ -40,6 +36,7 @@ end
 
 module Quote =
 struct
+
     let reduce = 
         Run_template_monad.reduce_all
 
@@ -54,19 +51,24 @@ struct
     (* term must be normalised or the pattern matching
      * will not work. reduce will not normalise the array elements
      *)
-    let nstr (term : Constr.t) (env : Environ.env) (sigma : Evd.evar_map) = 
+    let nstr_aux (term : Constr.t) (env : Environ.env) (sigma : Evd.evar_map) = 
         match kind (reduce env sigma term) with
         | App (hd, body) when equal hd (Lazy.force str_make) ->
                 begin match kind body.(0) with
                 | Array (_, arr, _, _) ->
                         String.init (Array.length arr) (fun i -> chr arr.(i) env sigma)
-                | _ -> raise (Not_a_nstr 
-                            (String.concat "Argument of 'MkStr' is not an array" [print_debug body.(0)]))
+                | _ -> raise (Not_a_nstr "Argument of 'MkStr' is not an array")
                 end
         | _ -> raise (Not_a_nstr "Not a application of 'MkStr'")
 
-    let ident (term : Constr.t) (env : Environ.env) (sigma : Evd.evar_map) = (* of type nstr *)
-        Id.of_string (nstr term env sigma)
+    let nstr (term : Constr.t) =
+        let env = Global.env () in
+        let sigma = Evd.from_env env in
+        try nstr_aux term env sigma with
+        | Not_a_nstr msg -> Tm_util.bad_term_verb term msg
+
+    let ident (term : Constr.t) (* of type ident *) =
+        Id.of_string (nstr term)
 end
 
 module Test = 
@@ -90,7 +92,7 @@ struct
             let (sigma, ident) = Constrintern.interp_open_constr env sigma ident in
             let ident = EConstr.to_constr sigma ident in
             let ident = Run_template_monad.reduce_all env sigma ident in
-            let ident = Constr.mkVar (Quote.ident ident env sigma) in
+            let ident = Constr.mkVar (Quote.ident ident) in
             let (sigma, mqPrint) = EConstr.fresh_global env sigma (Lazy.force Template_monad.ptmPrint) in
             let pgm = Constr.mkApp ((EConstr.to_constr sigma mqPrint), [| Constr.mkSet; ident |]) in
             run_pgm env sigma pgm

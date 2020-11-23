@@ -114,14 +114,7 @@ END
 
 VERNAC COMMAND EXTEND TemplateCoq_Nstr_Test_Quote CLASSIFIED AS SIDEFF STATE program
     | [ "MetaCoq" "nident" "about" constr(ident) ] ->
-        {   let (env, sigma) = fresh_env () in
-            let (sigma, ident) = Constrintern.interp_open_constr env sigma ident in
-            let ident = EConstr.to_constr sigma ident in
-            let ident = Run_template_monad.reduce_all env sigma ident in
-            let ident = Constr.mkVar (Nstring.Quote.ident ident env sigma) in
-            let (sigma, mqPrint) = EConstr.fresh_global env sigma (Lazy.force Template_monad.ptmPrint) in
-            let pgm = Constr.mkApp ((EConstr.to_constr sigma mqPrint), [| Constr.mkSet; ident |]) in
-            run_template_program env sigma ~poly:false pgm }
+    { Nstring.Test.print_id ident }
 END
 
 VERNAC COMMAND EXTEND TemplateCoq_Quote_Definition_Eval CLASSIFIED AS SIDEFF STATE program
