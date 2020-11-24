@@ -132,9 +132,7 @@ struct
       let term = to_string s in
       Hashtbl.add string_hash s term; term
 
-  let quote_ident i =
-    let s = Id.to_string i in
-    quote_string s
+  let quote_ident = Nstring.Quote.ident
 
   let quote_name n =
     match n with

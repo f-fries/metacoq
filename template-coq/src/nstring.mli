@@ -3,7 +3,7 @@ open Names
 val str_t : Constr.t Lazy.t
 val i63_t : Constr.t Lazy.t
 
-module Reify : 
+module Quote : 
 sig
     val i63 : int -> Constr.t
     val chr : char -> Constr.t
@@ -11,7 +11,7 @@ sig
     val ident : Id.t -> Constr.t
 end
 
-module Quote :
+module Reify :
 sig
     val chr : Constr.t -> char
     val nstr : Constr.t -> string

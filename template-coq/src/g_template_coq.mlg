@@ -102,7 +102,7 @@ VERNAC COMMAND EXTEND TemplateCoq_Nstr_Test_Reify CLASSIFIED AS SIDEFF
     | ["MetaCoq" "nident" ident(name) ":=" ident(str) ] ->
     {   let env = Global.env () in
         let sigma = Evd.from_env env in
-        let body = EConstr.of_constr (Nstring.Reify.ident str) in
+        let body = EConstr.of_constr (Nstring.Quote.ident str) in
         let cinfo = Declare.CInfo.make ~name:name 
             ~typ:(Some (EConstr.of_constr (Lazy.force Nstring.str_t))) () in
         let info = Declare.Info.make ~poly:false ~kind:(Decls.IsDefinition Decls.Definition) () in
@@ -118,7 +118,7 @@ VERNAC COMMAND EXTEND TemplateCoq_Nstr_Test_Quote CLASSIFIED AS SIDEFF STATE pro
         let (sigma, ident) = Constrintern.interp_open_constr env sigma ident in
         let ident = EConstr.to_constr sigma ident in
         let ident = Run_template_monad.reduce_all env sigma ident in
-        let ident = Constr.mkVar (Nstring.Quote.ident ident) in
+        let ident = Constr.mkVar (Nstring.Reify.ident ident) in
         let (sigma, mqPrint) = EConstr.fresh_global env sigma (Lazy.force Template_monad.ptmPrint) in
         let pgm = Constr.mkApp ((EConstr.to_constr sigma mqPrint), [| Constr.mkSet; ident |]) in
         run_pgm env sigma pgm }

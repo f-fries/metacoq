@@ -17,7 +17,7 @@ let withCurEnv (f : Environ.env -> Evd.evar_map -> 'a) : 'a =
     let sigma = Evd.from_env env in
     f env sigma
 
-module Reify = 
+module Quote = 
 struct
 
     let i63 (i : int) = mkInt (Uint63.of_int i)
@@ -39,7 +39,7 @@ struct
 
 end
 
-module Quote =
+module Reify =
 struct
 
     (* This is copied from Run_template_monad to break cyclic dependencied

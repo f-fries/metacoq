@@ -69,6 +69,8 @@ struct
     else
       not_supported trm
 
+  exception Wtf_is_this_called
+
   let unquote_string trm =
     let rec go n trm =
       let (h,args) = app_full trm [] in
@@ -87,8 +89,7 @@ struct
     Bytes.to_string (go 0 trm)
 
 
-  let unquote_ident trm =
-    Names.Id.of_string (unquote_string trm)
+  let unquote_ident = Nstring.Reify.ident
 
   let unquote_cast_kind trm =
     if constr_equall trm kVmCast then
