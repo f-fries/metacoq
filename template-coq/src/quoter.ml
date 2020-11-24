@@ -174,201 +174,212 @@ struct
   let quote_binder b =
     Q.quote_name (Context.binder_name b)
 
-  let quote_term_remember
-      (add_constant : KerName.t -> 'a -> 'a)
-      (add_inductive : Names.inductive -> 'a -> 'a) =
-    let rec quote_term (acc : 'a) env trm =
-      let aux acc env trm =
-      match Constr.kind trm with
-            | Constr.Rel i -> (Q.mkRel (Q.quote_int (i - 1)), acc)
-      | Constr.Var v -> (Q.mkVar (Q.quote_ident v), acc)
-      | Constr.Evar (n,args) ->
-              let (acc,args') =
-          CList.fold_left_map (fun acc x ->
-                let (x,acc) = quote_term acc env x in acc,x)
-          acc args
-        in
-         (Q.mkEvar (Q.quote_int (Evar.repr n)) (Array.of_list args'), acc)
-      | Constr.Sort s -> (Q.mkSort (Q.quote_sort s), acc)
-      | Constr.Cast (c,k,t) ->
-              let (c',acc) = quote_term acc env c in
-              let (t',acc) = quote_term acc env t in
-        let k' = Q.quote_cast_kind k in
-        (Q.mkCast c' k' t', acc)
+    let quote_term_remember (add_constant : KerName.t -> 'a -> 'a) (add_inductive : Names.inductive -> 'a -> 'a) = begin
 
-      | Constr.Prod (n,t,b) ->
-              let (t',acc) = quote_term acc env t in
-        let env = push_rel (toDecl (n, None, t)) env in
-        let (b',acc) = quote_term acc env b in
-        (Q.mkProd (Q.quote_name (Context.binder_name n)) t' b', acc)
+        let rec quote_term (acc : 'a) env trm = begin
 
-      | Constr.Lambda (n,t,b) ->
-              let (t',acc) = quote_term acc env t in
-        let (b',acc) = quote_term acc (push_rel (toDecl (n, None, t)) env) b in
-        (Q.mkLambda (Q.quote_name (Context.binder_name n)) t' b', acc)
+            let aux acc env trm =
+                begin match Constr.kind trm with
+                | Constr.Rel i -> (Q.mkRel (Q.quote_int (i - 1)), acc)
+                | Constr.Var v -> (Q.mkVar (Q.quote_ident v), acc)
+                | Constr.Evar (n,args) ->
+                    let (acc,args') =
+                    CList.fold_left_map (fun acc x ->
+                         let (x,acc) = quote_term acc env x in acc,x)
+                         acc args
+                    in (Q.mkEvar (Q.quote_int (Evar.repr n)) (Array.of_list args'), acc)
+                | Constr.Sort s -> (Q.mkSort (Q.quote_sort s), acc)
+                | Constr.Cast (c,k,t) ->
+                    let (c',acc) = quote_term acc env c in
+                    let (t',acc) = quote_term acc env t in
+                    let k' = Q.quote_cast_kind k in
+                    (Q.mkCast c' k' t', acc)
 
-      | Constr.LetIn (n,e,t,b) ->
-              let (e',acc) = quote_term acc env e in
-              let (t',acc) = quote_term acc env t in
-              let (b',acc) = quote_term acc (push_rel (toDecl (n, Some e, t)) env) b in
-        (Q.mkLetIn (Q.quote_name (Context.binder_name n)) e' t' b', acc)
+                | Constr.Prod (n,t,b) ->
+                    let (t',acc) = quote_term acc env t in
+                    let env = push_rel (toDecl (n, None, t)) env in
+                    let (b',acc) = quote_term acc env b in
+                    (Q.mkProd (Q.quote_name (Context.binder_name n)) t' b', acc)
 
-      | Constr.App (f,xs) ->
-        let (f',acc) = quote_term acc env f in
-        let (acc,xs') =
-          CArray.fold_left_map (fun acc x ->
-            let (x,acc) = quote_term acc env x in acc,x)
-            acc xs in
-        (Q.mkApp f' xs', acc)
+                | Constr.Lambda (n,t,b) ->
+                    let (t',acc) = quote_term acc env t in
+                    let (b',acc) = quote_term acc (push_rel (toDecl (n, None, t)) env) b in
+                    (Q.mkLambda (Q.quote_name (Context.binder_name n)) t' b', acc)
 
-      | Constr.Const (c,pu) ->
-        let kn = Constant.canonical c in
-        (Q.mkConst (Q.quote_kn kn) (Q.quote_univ_instance pu), add_constant kn acc)
+                | Constr.LetIn (n,e,t,b) ->
+                    let (e',acc) = quote_term acc env e in
+                    let (t',acc) = quote_term acc env t in
+                    let (b',acc) = quote_term acc (push_rel (toDecl (n, Some e, t)) env) b in
+                    (Q.mkLetIn (Q.quote_name (Context.binder_name n)) e' t' b', acc)
 
-      | Constr.Construct ((mind,c),pu) ->
-         (Q.mkConstruct (quote_inductive' mind, Q.quote_int (c - 1)) (Q.quote_univ_instance pu),
-          add_inductive mind acc)
+                | Constr.App (f,xs) ->
+                let (f',acc) = quote_term acc env f in
+                    let (acc,xs') =
+                        CArray.fold_left_map (fun acc x ->
+                        let (x,acc) = quote_term acc env x in acc,x)
+                        acc xs
+                    in (Q.mkApp f' xs', acc)
 
-      | Constr.Ind (mind,pu) ->
-         (Q.mkInd (quote_inductive' mind) (Q.quote_univ_instance pu),
-          add_inductive mind acc)
+                | Constr.Const (c,pu) ->
+                    let kn = Constant.canonical c in
+                    (Q.mkConst (Q.quote_kn kn) (Q.quote_univ_instance pu), add_constant kn acc)
 
-      | Constr.Case (ci,typeInfo,iv,discriminant,e) ->
-         let () = match iv with
-           | Constr.NoInvert -> ()
-           | Constr.CaseInvert _ ->
-             CErrors.user_err Pp.(str "Quoting case inversion not implemented.")
-         in
-         let ind = Q.quote_inductive (Q.quote_kn (Names.MutInd.canonical (fst ci.Constr.ci_ind)),
-                                      Q.quote_int (snd ci.Constr.ci_ind))
-         in
-         let npar = Q.quote_int ci.Constr.ci_npar in
-         let (qtypeInfo,acc) = quote_term acc env typeInfo in
-         let (qdiscriminant,acc) = quote_term acc env discriminant in
-         let (branches,nargs,acc) =
-           CArray.fold_left2 (fun (xs,nargs,acc) x narg ->
-               let (x,acc) = quote_term acc env x in
-               let narg = Q.quote_int narg in
-               (x :: xs, narg :: nargs, acc))
-             ([],[],acc) e ci.Constr.ci_cstr_nargs
-         in
-         (Q.mkCase (ind, npar) (List.rev nargs) qtypeInfo qdiscriminant (List.rev branches), acc)
+                | Constr.Construct ((mind,c),pu) ->
+                    (Q.mkConstruct (quote_inductive' mind, Q.quote_int (c - 1)) (Q.quote_univ_instance pu),
+                    add_inductive mind acc)
 
-      | Constr.Fix fp -> quote_fixpoint acc env fp
-      | Constr.CoFix fp -> quote_cofixpoint acc env fp
-      | Constr.Proj (p,c) ->
-         let ind = quote_inductive' (Projection.inductive p) in
-         let pars = Q.quote_int (Projection.npars p) in
-         let arg  = Q.quote_int (Projection.arg p)   in
-         let p' = Q.quote_proj ind pars arg in
-         let t', acc = quote_term acc env c in
-         (Q.mkProj p' t', add_inductive (Projection.inductive p) acc)
-      | Constr.Meta _ -> failwith "Meta not supported by TemplateCoq"
-      | Constr.Int _ -> failwith "Native integers not supported by TemplateCoq"
-      | Constr.Float _ -> failwith "Native floating point numbers not supported by TemplateCoq"
-      | Constr.Array _ -> failwith "Persistent arrays not supported by TemplateCoq"
-      in
-      let in_prop, env' = env in
-      if is_cast_prop () && not in_prop then
-        let ty =
-          let trm = EConstr.of_constr trm in
-          try Retyping.get_type_of env' Evd.empty trm
-          with e ->
-            Feedback.msg_debug (str"Anomaly trying to get the type of: " ++
-                                Printer.pr_econstr_env (snd env) Evd.empty trm);
-            raise e
-        in
-        let sf =
-          try Retyping.get_sort_family_of env' Evd.empty ty
-          with e ->
-            Feedback.msg_debug (str"Anomaly trying to get the sort of: " ++
-                                Printer.pr_econstr_env (snd env) Evd.empty ty);
-            raise e
-        in
-        if sf == Term.InProp then
-          aux acc (true, env')
-              (Constr.mkCast (trm, Constr.DEFAULTcast,
-                            Constr.mkCast (EConstr.to_constr Evd.empty ty, Constr.DEFAULTcast, Constr.mkProp)))
-        else aux acc env trm
-      else aux acc env trm
-    and quote_recdecl (acc : 'a) env b (ns,ts,ds) =
-      let ctxt =
-        CArray.map2_i (fun i na t -> (Context.Rel.Declaration.LocalAssum (na, Vars.lift i t))) ns ts in
-      let envfix = push_rel_context (CArray.rev_to_list ctxt) env in
-      let ns' = Array.map quote_binder ns in
-      let b' = Q.quote_int b in
-      let acc, ts' =
-        CArray.fold_left_map (fun acc t -> let x,acc = quote_term acc env t in acc, x) acc ts in
-      let acc, ds' =
-        CArray.fold_left_map (fun acc t -> let x,y = quote_term acc envfix t in y, x) acc ds in
-      ((b',(ns',ts',ds')), acc)
-    and quote_fixpoint acc env ((a,b),decl) =
-      let a' = Array.map Q.quote_int a in
-      let (b',decl'),acc = quote_recdecl acc env b decl in
-      (Q.mkFix ((a',b'),decl'), acc)
-    and quote_cofixpoint acc env (a,decl) =
-      let (a',decl'),acc = quote_recdecl acc env a decl in
-      (Q.mkCoFix (a',decl'), acc)
-    and quote_minductive_type (acc : 'a) env (t : MutInd.t) =
-      let mib = Environ.lookup_mind t (snd env) in
-      let uctx = get_abstract_inductive_universes mib.Declarations.mind_universes in
-      let inst = Univ.UContext.instance uctx in
-      let indtys =
-        (CArray.map_to_list (fun oib ->
-           let ty = Inductive.type_of_inductive ((mib,oib),inst) in
-           (Context.Rel.Declaration.LocalAssum (Context.annotR (Names.Name oib.mind_typename), ty))) mib.mind_packets)
-      in
-      let envind = push_rel_context (List.rev indtys) env in
-      let ref_name = Q.quote_kn (MutInd.canonical t) in
-      let (ls,acc) =
-        List.fold_left (fun (ls,acc) oib ->
-          let named_ctors =
-            CList.combine3
-              (Array.to_list oib.mind_consnames)
-              (Array.to_list oib.mind_user_lc)
-              (Array.to_list oib.mind_consnrealargs)
-          in
-          let indty = Inductive.type_of_inductive ((mib,oib),inst) in
-          let indty, acc = quote_term acc env indty in
-          let (reified_ctors,acc) =
-            List.fold_left (fun (ls,acc) (nm,ty,ar) ->
-              debug (fun () -> Pp.(str "opt_hnf_ctor_types:" ++ spc () ++
-                                  bool !opt_hnf_ctor_types)) ;
-              let ty = if !opt_hnf_ctor_types then hnf_type (snd envind) ty else ty in
-              let (ty,acc) = quote_term acc envind ty in
-              ((Q.quote_ident nm, ty, Q.quote_int ar) :: ls, acc))
-              ([],acc) named_ctors
-          in
-          let projs, acc =
-            match mib.Declarations.mind_record with
-            | PrimRecord [|id, csts, relevance, ps|] ->  (* TODO handle mutual records *)
-                let ctxwolet = Termops.smash_rel_context mib.mind_params_ctxt in
-                let indty = Constr.mkApp (Constr.mkIndU ((t,0),inst),
-                                        Context.Rel.to_extended_vect Constr.mkRel 0 ctxwolet) in
-                let indbinder = Context.Rel.Declaration.LocalAssum (Context.annotR (Names.Name id),indty) in
-                let envpars = push_rel_context (indbinder :: ctxwolet) env in
-                let ps, acc = CArray.fold_right2 (fun cst pb (ls,acc) ->
-                  let (ty, acc) = quote_term acc envpars pb in
-                  let na = Q.quote_ident (Names.Label.to_id cst) in
-                  ((na, ty) :: ls, acc)) csts ps ([],acc)
-                in ps, acc
-            | _ -> [], acc
-          in
-          let sf = Q.quote_sort_family oib.Declarations.mind_kelim in
-          (Q.quote_ident oib.mind_typename, indty, sf, (List.rev reified_ctors), projs) :: ls, acc)
-        ([],acc) (Array.to_list mib.mind_packets)
-      in
-      let nparams = Q.quote_int mib.Declarations.mind_nparams in
-      let paramsctx, acc = quote_rel_context quote_term acc env mib.Declarations.mind_params_ctxt in
-      let uctx = quote_universes_decl mib.Declarations.mind_universes in
-      let var = Option.map (CArray.map_to_list Q.quote_variance) mib.Declarations.mind_variance in
-      let bodies = List.map Q.mk_one_inductive_body (List.rev ls) in
-      let finite = Q.quote_mind_finiteness mib.Declarations.mind_finite in
-      (* let templatePoly = Q.quote_bool mi.mind_template in *)
-      let mind = Q.mk_mutual_inductive_body finite nparams paramsctx bodies uctx var in
-      ref_name, Q.mk_inductive_decl mind, acc
-    in ((fun acc env -> quote_term acc (false, env)),
-        (fun acc env -> quote_minductive_type acc (false, env)))
+                | Constr.Ind (mind,pu) ->
+                    (Q.mkInd (quote_inductive' mind) (Q.quote_univ_instance pu), add_inductive mind acc)
+
+                | Constr.Case (ci,typeInfo,iv,discriminant,e) ->
+                    let () = 
+                        match iv with
+                        | Constr.NoInvert -> ()
+                        | Constr.CaseInvert _ ->
+                        CErrors.user_err Pp.(str "Quoting case inversion not implemented.")
+                    in
+                    let ind = Q.quote_inductive (Q.quote_kn (Names.MutInd.canonical (fst ci.Constr.ci_ind)),
+                                              Q.quote_int (snd ci.Constr.ci_ind))
+                    in
+                    let npar = Q.quote_int ci.Constr.ci_npar in
+                    let (qtypeInfo,acc) = quote_term acc env typeInfo in
+                    let (qdiscriminant,acc) = quote_term acc env discriminant in
+                    let (branches,nargs,acc) =
+                        CArray.fold_left2 (fun (xs,nargs,acc) x narg ->
+                           let (x,acc) = quote_term acc env x in
+                           let narg = Q.quote_int narg in
+                           (x :: xs, narg :: nargs, acc))
+                        ([],[],acc) e ci.Constr.ci_cstr_nargs
+                    in (Q.mkCase (ind, npar) (List.rev nargs) qtypeInfo qdiscriminant (List.rev branches), acc)
+
+                | Constr.Fix fp -> quote_fixpoint acc env fp
+                | Constr.CoFix fp -> quote_cofixpoint acc env fp
+                | Constr.Proj (p,c) ->
+                    let ind = quote_inductive' (Projection.inductive p) in
+                    let pars = Q.quote_int (Projection.npars p) in
+                    let arg  = Q.quote_int (Projection.arg p)   in
+                    let p' = Q.quote_proj ind pars arg in
+                    let t', acc = quote_term acc env c in
+                    (Q.mkProj p' t', add_inductive (Projection.inductive p) acc)
+                | Constr.Meta _ -> failwith "Meta not supported by TemplateCoq"
+                | Constr.Int _ -> failwith "Native integers not supported by TemplateCoq"
+                | Constr.Float _ -> failwith "Native floating point numbers not supported by TemplateCoq"
+                | Constr.Array _ -> failwith "Persistent arrays not supported by TemplateCoq"
+                end (* aux *)
+
+            in
+            let in_prop, env' = env in
+            if is_cast_prop () && not in_prop then
+                let ty =
+                    let trm = EConstr.of_constr trm in
+                    try Retyping.get_type_of env' Evd.empty trm with
+                    | e ->
+                        Feedback.msg_debug (str"Anomaly trying to get the type of: " ++
+                            Printer.pr_econstr_env (snd env) Evd.empty trm);
+                        raise e
+                in
+                let sf =
+                try Retyping.get_sort_family_of env' Evd.empty ty with
+                | e -> 
+                        Feedback.msg_debug (str"Anomaly trying to get the sort of: " ++
+                                    Printer.pr_econstr_env (snd env) Evd.empty ty);
+                        raise e
+                in
+                if sf == Term.InProp then
+                    aux acc (true, env')
+                    (Constr.mkCast (trm, Constr.DEFAULTcast,
+                                Constr.mkCast (EConstr.to_constr Evd.empty ty, Constr.DEFAULTcast, Constr.mkProp)))
+                else 
+                    aux acc env trm
+            else 
+                aux acc env trm
+        end (* quote_term *)
+
+        and quote_recdecl (acc : 'a) env b (ns,ts,ds) =
+            let ctxt =
+                CArray.map2_i (fun i na t -> (Context.Rel.Declaration.LocalAssum (na, Vars.lift i t))) ns ts in
+            let envfix = push_rel_context (CArray.rev_to_list ctxt) env in
+            let ns' = Array.map quote_binder ns in
+            let b' = Q.quote_int b in
+            let acc, ts' =
+              CArray.fold_left_map (fun acc t -> let x,acc = quote_term acc env t in acc, x) acc ts in
+            let acc, ds' =
+              CArray.fold_left_map (fun acc t -> let x,y = quote_term acc envfix t in y, x) acc ds in
+            ((b',(ns',ts',ds')), acc)
+
+        and quote_fixpoint acc env ((a,b),decl) =
+            let a' = Array.map Q.quote_int a in
+            let (b',decl'),acc = quote_recdecl acc env b decl in
+            (Q.mkFix ((a',b'),decl'), acc)
+
+        and quote_cofixpoint acc env (a,decl) =
+            let (a',decl'),acc = quote_recdecl acc env a decl in
+            (Q.mkCoFix (a',decl'), acc)
+
+        and quote_minductive_type (acc : 'a) env (t : MutInd.t) =
+            let mib = Environ.lookup_mind t (snd env) in
+            let uctx = get_abstract_inductive_universes mib.Declarations.mind_universes in
+            let inst = Univ.UContext.instance uctx in
+            let indtys =
+                (CArray.map_to_list (fun oib ->
+                   let ty = Inductive.type_of_inductive ((mib,oib),inst) in
+                   (Context.Rel.Declaration.LocalAssum (Context.annotR (Names.Name oib.mind_typename), ty))) mib.mind_packets)
+            in
+            let envind = push_rel_context (List.rev indtys) env in
+            let ref_name = Q.quote_kn (MutInd.canonical t) in
+            let (ls,acc) =
+                List.fold_left 
+                    (fun (ls,acc) oib -> begin
+                        let named_ctors =
+                            CList.combine3
+                                (Array.to_list oib.mind_consnames)
+                                (Array.to_list oib.mind_user_lc)
+                                (Array.to_list oib.mind_consnrealargs)
+                        in
+                        let indty = Inductive.type_of_inductive ((mib,oib),inst) in
+                        let indty, acc = quote_term acc env indty in
+                        let (reified_ctors,acc) =
+                            List.fold_left (fun (ls,acc) (nm,ty,ar) ->
+                                debug (fun () -> Pp.(str "opt_hnf_ctor_types:" ++ spc () ++
+                                                    bool !opt_hnf_ctor_types)) ;
+                                let ty = if !opt_hnf_ctor_types then hnf_type (snd envind) ty else ty in
+                                let (ty,acc) = quote_term acc envind ty in
+                                ((Q.quote_ident nm, ty, Q.quote_int ar) :: ls, acc))
+                                ([],acc) named_ctors
+                        in
+                        let projs, acc =
+                          match mib.Declarations.mind_record with
+                          | PrimRecord [|id, csts, relevance, ps|] ->  (* TODO handle mutual records *)
+                              let ctxwolet = Termops.smash_rel_context mib.mind_params_ctxt in
+                              let indty = Constr.mkApp (Constr.mkIndU ((t,0),inst),
+                                                      Context.Rel.to_extended_vect Constr.mkRel 0 ctxwolet) in
+                              let indbinder = Context.Rel.Declaration.LocalAssum (Context.annotR (Names.Name id),indty) in
+                              let envpars = push_rel_context (indbinder :: ctxwolet) env in
+                              let ps, acc = CArray.fold_right2 (fun cst pb (ls,acc) ->
+                                let (ty, acc) = quote_term acc envpars pb in
+                                let na = Q.quote_ident (Names.Label.to_id cst) in
+                                ((na, ty) :: ls, acc)) csts ps ([],acc)
+                              in ps, acc
+                          | _ -> [], acc
+                        in
+                        let sf = Q.quote_sort_family oib.Declarations.mind_kelim in
+                        (Q.quote_ident oib.mind_typename, indty, sf, (List.rev reified_ctors), projs) :: ls, acc
+                    end) (* lambda *)
+                    ([],acc) (Array.to_list mib.mind_packets)
+            in
+            let nparams = Q.quote_int mib.Declarations.mind_nparams in
+            let paramsctx, acc = quote_rel_context quote_term acc env mib.Declarations.mind_params_ctxt in
+            let uctx = quote_universes_decl mib.Declarations.mind_universes in
+            let var = Option.map (CArray.map_to_list Q.quote_variance) mib.Declarations.mind_variance in
+            let bodies = List.map Q.mk_one_inductive_body (List.rev ls) in
+            let finite = Q.quote_mind_finiteness mib.Declarations.mind_finite in
+            (* let templatePoly = Q.quote_bool mi.mind_template in *)
+            let mind = Q.mk_mutual_inductive_body finite nparams paramsctx bodies uctx var in
+            ref_name, Q.mk_inductive_decl mind, acc
+
+        in ((fun acc env -> quote_term acc (false, env)),
+            (fun acc env -> quote_minductive_type acc (false, env)))
+    end (* qoute_term_remember *)
 
   let quote_term env trm =
     let (fn,_) = quote_term_remember (fun _ () -> ()) (fun _ () -> ()) in
@@ -386,73 +397,72 @@ struct
     let visited_terms = ref Names.KNset.empty in
     let visited_types = ref Mindset.empty in
     let constants = ref [] in
+
     let add quote_term quote_type trm acc =
-      match trm with
-      | Ind (mi,idx) ->
-        let t = mi in
-        if Mindset.mem t !visited_types then ()
-        else
-          begin
-            visited_types := Mindset.add t !visited_types ;
-            let (kn,d,acc) =
-              try quote_type acc env mi
-              with e ->
-                Feedback.msg_debug (str"Exception raised while checking " ++ MutInd.print mi);
-                raise e
-            in
-            constants := (kn,d) :: !constants
-          end
-      | Const kn ->
-        if Names.KNset.mem kn !visited_terms then ()
-        else
-          begin
-            visited_terms := Names.KNset.add kn !visited_terms ;
-      let c = Names.Constant.make kn kn in
-            let cd = Environ.lookup_constant c env in
-      let body = match cd.const_body with
-        | Undef _ -> None
-        | Primitive _ -> CErrors.user_err Pp.(str "Primitives are unsupported by TemplateCoq")
-	      | Def cs -> Some (Mod_subst.force_constr cs)
-	      | OpaqueDef lc ->
-          if bypass then
-          let c, univs = Opaqueproof.force_proof Library.indirect_accessor (Environ.opaque_tables env) lc in
-          let () = match univs with
-          | Opaqueproof.PrivateMonomorphic () -> ()
-          | Opaqueproof.PrivatePolymorphic (n, csts) -> if not (Univ.ContextSet.is_empty csts && Int.equal n 0) then
-            CErrors.user_err Pp.(str "Private polymorphic universes not supported by TemplateCoq")
-          in Some c
-          else None
-        in
-        let tm, acc =
-          match body with
-          | None -> None, acc
-          | Some tm -> try let (tm, acc) = quote_term acc (Global.env ()) tm in
-                            (Some tm, acc)
-                        with e ->
-                          Feedback.msg_debug (str"Exception raised while checking body of " ++ KerName.print kn);
-              raise e
-        in
-        let uctx = quote_universes_decl cd.const_universes in
-        let ty, acc =
-          let ty = cd.const_type
+        match trm with
+        | Ind (mi,idx) ->
+            let t = mi in
+            if Mindset.mem t !visited_types then ()
+            else begin
+                visited_types := Mindset.add t !visited_types ;
+                let (kn,d,acc) =
+                    try quote_type acc env mi with 
+                    | e -> Feedback.msg_debug (str"Exception raised while checking " ++ MutInd.print mi); raise e
+                in
+                constants := (kn,d) :: !constants
+            end
+        | Const kn ->
+            if Names.KNset.mem kn !visited_terms then ()
+            else begin
+                visited_terms := Names.KNset.add kn !visited_terms ;
+                let c = Names.Constant.make kn kn in
+                let cd = Environ.lookup_constant c env in
+                let body = match cd.const_body with
+                | Undef _ -> None
+                | Primitive _ -> CErrors.user_err Pp.(str "Primitives are unsupported by TemplateCoq")
+	            | Def cs -> Some (Mod_subst.force_constr cs)
+	            | OpaqueDef lc ->
+                    if bypass then
+                        let c, univs = Opaqueproof.force_proof Library.indirect_accessor (Environ.opaque_tables env) lc in
+                        let () = match univs with
+                        | Opaqueproof.PrivateMonomorphic () -> ()
+                        | Opaqueproof.PrivatePolymorphic (n, csts) -> 
+                                if not (Univ.ContextSet.is_empty csts && Int.equal n 0) then begin
+                                  CErrors.user_err Pp.(str "Private polymorphic universes not supported by TemplateCoq")
+                                end
+                        in Some c
+                    else None
+                in let tm, acc =
+                    begin match body with
+                    | None -> None, acc
+                    | Some tm -> 
+                            try let (tm, acc) = quote_term acc (Global.env ()) tm in (Some tm, acc) with 
+                            | e -> 
+                                  Feedback.msg_debug (str"Exception raised while checking body of " ++ KerName.print kn); 
+                                  raise e
+                    end
+                in let uctx = quote_universes_decl cd.const_universes in
+                let ty, acc = 
+                    let ty = cd.const_type
                       (*CHANGE :  template polymorphism for definitions was removed.
                       See: https://github.com/coq/coq/commit/d9530632321c0b470ece6337cda2cf54d02d61eb *)
             (* match cd.const_type with
         * | RegularArity ty -> ty
         * | TemplateArity (ctx,ar) ->
               *    Constr.it_mkProd_or_LetIn (Constr.mkSort (Sorts.Type ar.template_level)) ctx *)
-          in
-          (try quote_term acc (Global.env ()) ty
-            with e ->
-              Feedback.msg_debug (str"Exception raised while checking type of " ++ KerName.print kn);
-              raise e)
-        in
-        let cst_bdy = Q.mk_constant_body ty tm uctx in
-        let decl = Q.mk_constant_decl cst_bdy in
-        constants := (Q.quote_kn kn, decl) :: !constants
-          end
-    in
-    let (quote_rem,quote_typ) =
+                    in begin 
+                        try quote_term acc (Global.env ()) ty with
+                        | e -> 
+                            Feedback.msg_debug (str"Exception raised while checking type of " ++ KerName.print kn);
+                            raise e
+                    end
+                in
+                let cst_bdy = Q.mk_constant_body ty tm uctx in
+                let decl = Q.mk_constant_decl cst_bdy in
+                constants := (Q.quote_kn kn, decl) :: !constants
+            end
+
+    in let (quote_rem,quote_typ) =
       let a = ref (fun _ _ _ -> assert false) in
       let b = ref (fun _ _ _ -> assert false) in
       let (x,y) =
