@@ -59,25 +59,27 @@ End V.
 (* tmCurrentModPath *)
 MetaCoq Run (tmCurrentModPath tt >>= tmPrint).
 
+Print ConstRef.
+Print inductive.
 (* tmLocate *)
 Definition get_kername ident := 
     r <- tmLocate ident ;;
     match r with
+    | cons (IndRef mind) _ => tmReturn mind.(inductive_mind)
     | cons (ConstRef kn) _ => tmReturn kn
-    | _ => tmFail String.EmptyString
+    | _ => tmFail "not found"
     end.
 
-Fail MetaCoq Run (
+MetaCoq Run (
     get_kername ($ "nat") >>= tmDefinition ($ "nat_kername")
 ).
+Print nat_kername.
 
 (* tmQuoteInductive *)
-Fail MetaCoq Run (tmQuoteInductive nat_kername).
+MetaCoq Run (tmQuoteInductive nat_kername >>= tmPrint).
 
 (* MetaCoq Run (tmQuoteUniverses >>= tmPrint). *)
-Print tmQuoteConstant.
-
-Fail MetaCoq Run (
+MetaCoq Run (
     kn <- get_kername ($ "y" );;
     cst <- tmQuoteConstant kn true ;;
     tmPrint cst).
@@ -87,13 +89,33 @@ MetaCoq Run (tmQuote (fun x : nat => (fun y t => 0%nat) Type) >>= tmPrint).
 
 MetaCoq Test Quote get_kername.
 MetaCoq Quote Definition q1 := Eval vm_compute in get_kername.
-MetaCoq Quote Definition Recursively q3 := Nat.add.
-
 Print q1.
+MetaCoq Quote Recursively Definition q3 := get_kername.
+Print q3.
 
-
+(* tmUnquote and associated Vernac Commands *)
 MetaCoq Test Unquote q1.
+    
 MetaCoq Unquote Definition get_kername' := q1.
 Print get_kername'.
+
+MetaCoq Run (
+    r <- tmUnquote q1 ;;
+    tmPrint (my_projT1 r)
+).
+
+MetaCoq Run (
+    t <- tmUnquoteTyped (qualid -> TemplateMonad (modpath × nstring)) q1;;
+    tmPrint t
+).
+
+(* tmInferInstance *)
+MetaCoq Run (
+    t <- tmInferInstance None (Monad TemplateMonad);;
+    match t with
+    | my_Some i => tmPrint i
+    | _ => tmFail "not instance"
+    end
+). (* expected output: TemplateMonad_Monad *)
 
 
