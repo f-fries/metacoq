@@ -397,8 +397,11 @@ let rec run_template_program_rec ~poly ?(intactic=false) (k : Constr.t Plugin_co
     let err = unquote_string (reduce_all env evm trm) in
     CErrors.user_err (str err)
   | TmLocate id ->
-    let id = unquote_string (reduce_all env evm id) in
-    Plugin_core.run ~st (Plugin_core.tmLocateString id) env evm
+    let id = unquote_ident (reduce_all env evm id) in
+    (* let qualid = Id.to_string id in
+    Plugin_core.run ~st (Plugin_core.tmLocateString str) env evm *)
+    let qualid = Libnames.qualid_of_ident id in
+    Plugin_core.run ~st (Plugin_core.tmLocate qualid) env evm
       (fun ~st env evm l ->
          let l = List.map quote_global_reference l in
          let l = to_coq_listl tglobal_reference l in
