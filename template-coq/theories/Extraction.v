@@ -5,8 +5,10 @@
 *)
 
 (* From MetaCoq Require All. *)
-(*)
+(*
+
 Require Import MetaCoq.Template.utils MetaCoq.Template.Ast.
+Require Import ExtrOcamlPArray.
 Require Import FSets.
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString ExtrOcamlZInt.

@@ -12,7 +12,8 @@ Require Export MCPrelude
         MCSquash
         MCRelations
         MCString
-        MCNativeIdent
+        MCInt63
+        MCNativeString
 .
 
 Tactic Notation "destruct" "?" :=

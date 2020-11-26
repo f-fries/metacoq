@@ -14,7 +14,8 @@ theories/utils/MCProd.v
 theories/utils/MCRelations.v
 theories/utils/MCSquash.v
 theories/utils/MCString.v
-theories/utils/MCNativeIdent.v
+theories/utils/MCInt63.v
+theories/utils/MCNativeString.v
 theories/utils/wGraph.v
 
 # common
