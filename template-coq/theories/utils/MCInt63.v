@@ -1,9 +1,11 @@
 
-Require Export Int63.
+Require Import Int63.
 Require Import PArray Byte Ascii.
 
 Local Open Scope int63_scope.
 Delimit Scope int63_scope with i63.
+
+Open Scope array_scope.
 
 (*
 Section Eliminators.

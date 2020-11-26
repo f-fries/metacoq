@@ -1,7 +1,7 @@
 
 Require Import Array.PArray.
 Require Import Bool.
-Require Import MCInt63.
+Require Import Int63 MCInt63.
 Require Import Byte.
 Require String.
 
