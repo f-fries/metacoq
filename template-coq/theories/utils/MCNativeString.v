@@ -3,6 +3,7 @@ Require Import Array.PArray.
 Require Import Bool.
 Require Import Int63 MCInt63.
 Require Import Byte.
+Require OrderedType.
 Require String.
 
 Local Definition char_array := array int.
@@ -30,14 +31,57 @@ Definition nstring_eqb '(mk_str a) '(mk_str b) :=
     && str_elemeq (nat_length a) 0 a b.
 Arguments nstring_eqb _%nstr _%nstr.
 
-Axiom nstring_eqb_correct:
-        forall a b, nstring_eqb a b = true <-> a = b.
+Axiom nstring_eqb_correct : 
+    forall x y, nstring_eqb x y = true <-> x = y.
 
 Definition nstring_eqdec (x y : nstring) : {x = y} + {x <> y}.
 Proof. destruct (nstring_eqb_correct x y) as [H1 H2]. destruct (nstring_eqb x y); auto.
     right. intros H3 % H2. congruence.
 Defined.
 
+Local Definition i63_min (x y : int) := 
+    if x < y then x else y.
+
+(* Order = The typical lexical order on strings *)
+Definition nstring_compare '(mk_str xs) '(mk_str ys) : comparison :=
+    let len_xs := length xs in
+    let len_ys := length ys in
+    let fuel := i63_to_nat (i63_min len_xs len_ys) in
+    let fix go n i := 
+        match n with
+        | 0 => Int63.compare len_xs len_ys
+        | S n =>
+            match Int63.compare xs.[i] ys.[i] with
+            | Eq => go n (i + 1)
+            | r  => r
+            end
+        end
+    in go fuel 0.
+
+Axiom nstring_compare_eq :
+    forall x y, nstring_compare x y = Eq <-> x = y.
+
+Definition nstring_order (v : comparison) (x y : nstring) : Prop :=
+    nstring_compare x y = v.
+    
+Lemma nstring_lt_irreflexive x : ~ nstring_order Lt x x.
+Proof.
+    intros H. assert (nstring_compare x x = Eq) by (now apply nstring_compare_eq).
+    congruence.
+Qed.
+
+Lemma nstring_gt_irreflexive x : ~ nstring_order Gt x x.
+Proof.
+    intros H. assert (nstring_compare x x = Eq) by (now apply nstring_compare_eq).
+    congruence.
+Qed.
+
+Axiom nstring_order_trans : forall v x y z,   
+       nstring_order v x y 
+    -> nstring_order v y z
+    -> nstring_order v x z.
+
+Compute nstring_compare (mk_str [| 0 ; 1 ; 2 | 0 |]) (mk_str [| 0 ; 1; 4 | 0 |]).
 (* Concatenation *)
 Local Fixpoint copy_from (n : nat) (i k: int) (a b : char_array) :=
             match n with

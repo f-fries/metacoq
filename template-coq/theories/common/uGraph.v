@@ -1,7 +1,6 @@
 Require Import Nat String BinInt Lia ssrbool.
 Require Import MSetWeakList MSetFacts MSetProperties.
 From MetaCoq.Template Require Import utils config Universes monad_utils wGraph.
-
 Import ListNotations.
 Import ConstraintType MonadNotation.
 Local Open Scope nat_scope.
@@ -10,37 +9,44 @@ Arguments Z.add : simpl nomatch.
 Arguments Nat.leb : simpl nomatch.
 Arguments Nat.eqb : simpl nomatch.
 
-
-
+About comparison.
 (** variable levels are levels which are Level or Var *)
 Module VariableLevel.
-  Inductive t := Level (_ : string) | Var (_ : nat).
+  Inductive t := Level (_ : nstring) | Var (_ : nat).
   Definition lt : t -> t -> Prop :=
     fun x y => match x, y with
             | Level _, Var _ => True
-            | Level s, Level s' => string_lt s s'
+            | Level s, Level s' => nstring_order Datatypes.Lt s s'
             | Var n, Var n' => n < n'
             | Var _, Level _ => False
             end.
+
   Global Instance lt_strorder : StrictOrder lt.
     split.
     - intros [s|n] H; cbn in H.
       unfold string_lt in H.
-      pose proof (string_compare_eq s s). intuition.
+      pose proof (nstring_compare_eq s s). intuition.
       rewrite H in *. discriminate. intuition.
     - intros [s1|n1] [s2|n2] [s3|n3]; cbn; intuition.
-      eapply transitive_string_lt; eassumption.
+      eapply nstring_order_trans; eassumption.
   Qed.
+
   Definition lt_compat : Proper (Logic.eq ==> Logic.eq ==> iff) lt.
     intros x y [] z t []; reflexivity.
   Qed.
+
   Definition compare : t -> t -> comparison :=
     fun x y => match x, y with
             | Level _, Var _ => Datatypes.Lt
-            | Level s, Level s' => string_compare s s'
+            | Level s, Level s' => nstring_compare s s'
             | Var n, Var n' => Nat.compare n n'
             | Var _, Level _ => Datatypes.Gt
             end.
+           
+  Axiom compare_spec :
+    forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
+  
+  (*)
   Definition compare_spec :
     forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
     intros [s|n] [s'|n']; cbn; try now constructor.
@@ -51,9 +57,11 @@ Module VariableLevel.
       2: apply PeanoNat.Nat.compare_spec.
       split; congruence.
   Qed.
+  *)
+
   Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
     intros [s|n] [s'|n']; try now constructor.
-    destruct (string_dec s s'); [left|right]; congruence.
+    destruct (nstring_eqdec s s'); [left|right]; congruence.
     destruct (PeanoNat.Nat.eq_dec n n'); [left|right]; congruence.
   Defined.
 
@@ -616,7 +624,8 @@ Proof.
         exists (Level l'); intuition. exists (Var l'); intuition.
       * intros [[l' [[H1|H1] H2]]|H].
         right. subst a. destruct l'; apply EdgeSet.add_spec; left; tas.
-        destruct l'; left; [exists (Level s)|exists (Var n)]; intuition.
+
+        destruct l'; left; [exists (Level n)|exists (Var n)]; intuition.
         right. destruct a; tas; apply EdgeSet.add_spec; right; tas.
 Qed.
 
@@ -634,8 +643,8 @@ Proof.
   - apply Hi.
   - cbn. intros l Hl. sq. destruct l. constructor.
     econstructor. 2: constructor.
-    assert (He: EdgeSet.In (edge_of_level (Level s)) (wGraph.E (make_graph uctx))). {
-      apply make_graph_E. left. exists (Level s). intuition. }
+    assert (He: EdgeSet.In (edge_of_level (Level n)) (wGraph.E (make_graph uctx))). {
+      apply make_graph_E. left. exists (Level n). intuition. }
     eexists; exact He.
     econstructor. 2: constructor.
     assert (He: EdgeSet.In (edge_of_level (Var n)) (wGraph.E (make_graph uctx))). {
@@ -719,9 +728,9 @@ Section MakeGraph.
     destruct x; cbnr.
     - intros _. now apply proj1 in Hl; cbn in Hl.
     - intro Hs. apply Nat2Pos.id.
-      assert (HH: EdgeSet.In (lSet, 1, vtn (Level s)) (wGraph.E G)). {
+      assert (HH: EdgeSet.In (lSet, 1, vtn (Level n)) (wGraph.E G)). {
         subst G. apply make_graph_E. left.
-        exists (Level s). intuition. }
+        exists (Level n). intuition. }
       apply (proj2 Hl) in HH; cbn in HH. lia.
   Qed.
 

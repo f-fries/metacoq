@@ -176,3 +176,5 @@ Definition i63_to_ascii x :=
         (i63_get_bit x 6)
         (i63_get_bit x 7).
 
+Definition i63_min x y :=
+    if x < y then x else y.

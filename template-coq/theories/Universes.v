@@ -11,7 +11,7 @@ Local Open Scope Z_scope.
     universe variable (Level.t).
     It is >= for polymorphic universes and > 0 for monomorphic universes. *)
 Record valuation :=
-  { valuation_mono : string -> positive ;
+  { valuation_mono : nstring -> positive ;
     valuation_poly : nat -> nat }.
 
 Class Evaluable (A : Type) := val : valuation -> A -> Z.
@@ -20,7 +20,7 @@ Module Level.
   Inductive t_ : Set :=
   | lProp
   | lSet
-  | Level (_ : string)
+  | Level (_ : nstring)
   | Var (_ : nat) (* these are debruijn indices *).
 
   Definition t := t_.
@@ -57,7 +57,6 @@ Module Level.
                | Var x => Z.of_nat (v.(valuation_poly) x)
                end.
 
-
   Definition compare (l1 l2 : t) : comparison :=
     match l1, l2 with
     | lProp, lProp => Eq
@@ -66,7 +65,7 @@ Module Level.
     | lSet, lSet => Eq
     | lSet, _ => Lt
     | _, lSet => Gt
-    | Level s1, Level s2 => string_compare s1 s2
+    | Level s1, Level s2 => nstring_compare s1 s2
     | Level _, _ => Lt
     | _, Level _ => Gt
     | Var n, Var m => Nat.compare n m
@@ -77,7 +76,7 @@ Module Level.
 
   Definition eq_dec (l1 l2 : t) : {l1 = l2}+{l1 <> l2}.
   Proof.
-    decide equality. apply string_dec. apply Peano_dec.eq_nat_dec.
+    decide equality. apply nstring_eqdec. apply Peano_dec.eq_nat_dec.
   Defined.
 
   Inductive lt_ : t -> t -> Prop :=
@@ -86,7 +85,7 @@ Module Level.
   | ltPropVar n : lt_ lProp (Var n)
   | ltSetLevel s : lt_ lSet (Level s)
   | ltSetVar n : lt_ lSet (Var n)
-  | ltLevelLevel s s' : string_lt s s' -> lt_ (Level s) (Level s')
+  | ltLevelLevel s s' : nstring_order Lt s s' -> lt_ (Level s) (Level s')
   | ltLevelVar s n : lt_ (Level s) (Var n)
   | ltVarVar n n' : Nat.lt n n' -> lt_ (Var n) (Var n').
 
@@ -96,11 +95,11 @@ Module Level.
   Proof.
     constructor.
     - intros [| | |] X; inversion X.
-      eapply string_lt_irreflexive; tea.
+      eapply nstring_lt_irreflexive; tea.
       eapply Nat.lt_irrefl; tea.
     - intros [| | |] [| | |] [| | |] X1 X2;
         inversion X1; inversion X2; constructor.
-      eapply transitive_string_lt; tea.
+      eapply (nstring_order_trans Lt); tea.
       etransitivity; tea.
   Qed.
 
@@ -108,13 +107,19 @@ Module Level.
   Proof.
     intros x y e z t e'. unfold eq in *; subst. reflexivity.
   Qed.
-
+ 
+  (* TODO *)
+  Axiom compare_spec :
+    forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
+  
+  (*
   Definition compare_spec :
     forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
   Proof.
     intros [] []; repeat constructor.
     - eapply CompareSpec_Proper.
-      5: eapply CompareSpec_string. 4: reflexivity.
+      5: eapply CompareSpec_string. 
+      4: reflexivity.
       all: split; [now inversion 1|]. now intros ->.
       all: intro; now constructor.
     - eapply CompareSpec_Proper.
@@ -122,6 +127,7 @@ Module Level.
       all: split; [now inversion 1|]. now intros ->.
       all: intro; now constructor.
   Qed.
+  *)
 
   (* Bonus *)
   Definition eqb (l1 l2 : Level.t) : bool
@@ -130,17 +136,17 @@ Module Level.
   Global Instance eqb_refl : Reflexive eqb.
   Proof.
     intros []; unfold eqb; cbnr.
-    - rewrite (ssreflect.iffRL (string_compare_eq s s)). all: auto.
+    - rewrite (ssreflect.iffRL (nstring_compare_eq n n)). all: auto.
     - rewrite Nat.compare_refl. reflexivity.
   Qed.
 
   Lemma eqb_spec l l' : reflect (eq l l') (eqb l l').
   Proof.
     destruct l, l'; cbn; try constructor; try reflexivity; try discriminate.
-    - apply iff_reflect. unfold eqb; cbn.
-      destruct (CompareSpec_string s s0); split; intro HH;
-        try reflexivity; try discriminate; try congruence.
-      all: inversion HH; subst; now apply string_lt_irreflexive in H.
+    - apply iff_reflect. unfold eqb; cbn. split.
+      + intros H. inversion H. rewrite (ssreflect.iffRL (nstring_compare_eq n0 n0) eq_refl); reflexivity.
+      + destruct (nstring_compare n n0) eqn:H; try congruence. apply nstring_compare_eq in H.
+        congruence.
     - apply iff_reflect. unfold eqb; cbn.
       destruct (Nat.compare_spec n n0); split; intro HH;
         try reflexivity; try discriminate; try congruence.
@@ -149,6 +155,7 @@ Module Level.
 
   Definition eq_leibniz (x y : t) : eq x y -> x = y := id.
 End Level.
+
 
 Module LevelSet := MSetList.MakeWithLeibniz Level.
 Module LevelSetFact := WFactsOn Level LevelSet.
@@ -175,7 +182,7 @@ Qed.
 
 (** no prop levels are levels which are Set or Level or Var *)
 Module NoPropLevel.
-  Inductive t_ := lSet |  Level (_ : string) | Var (_ : nat).
+  Inductive t_ := lSet |  Level (_ : nstring) | Var (_ : nat).
 
   Definition t : Set := t_.
 
@@ -192,7 +199,7 @@ Module NoPropLevel.
     | lSet, lSet => Eq
     | lSet, _ => Lt
     | _, lSet => Gt
-    | Level s1, Level s2 => string_compare s1 s2
+    | Level s1, Level s2 => nstring_compare s1 s2
     | Level _, _ => Lt
     | _, Level _ => Gt
     | Var n, Var m => Nat.compare n m
@@ -204,13 +211,13 @@ Module NoPropLevel.
 
   Definition eq_dec (l1 l2 : t) : {l1 = l2}+{l1 <> l2}.
   Proof.
-    decide equality. apply string_dec. apply Peano_dec.eq_nat_dec.
+    decide equality. apply nstring_eqdec. apply Peano_dec.eq_nat_dec.
   Defined.
 
   Inductive lt_ : t -> t -> Prop :=
   | ltSetLevel s : lt_ lSet (Level s)
   | ltSetVar n : lt_ lSet (Var n)
-  | ltLevelLevel s s' : string_lt s s' -> lt_ (Level s) (Level s')
+  | ltLevelLevel s s' : nstring_order Lt s s' -> lt_ (Level s) (Level s')
   | ltLevelVar s n : lt_ (Level s) (Var n)
   | ltVarVar n n' : Nat.lt n n' -> lt_ (Var n) (Var n').
 
@@ -219,11 +226,11 @@ Module NoPropLevel.
   Global Instance lt_strorder : StrictOrder lt.
     split.
     - intros [| |] X; inversion X.
-      eapply string_lt_irreflexive; tea.
+      eapply nstring_lt_irreflexive; tea.
       eapply Nat.lt_irrefl; tea.
     - intros [| |] [| |] [| |] X1 X2;
         inversion X1; inversion X2; constructor.
-      eapply transitive_string_lt; tea.
+      eapply nstring_order_trans; tea.
       etransitivity; tea.
   Qed.
 
@@ -232,6 +239,10 @@ Module NoPropLevel.
     intros x y e z t e'. unfold eq in *; subst. reflexivity.
   Qed.
 
+  Axiom compare_spec :
+    forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
+  
+  (*
   Definition compare_spec :
     forall x y : t, CompareSpec (x = y) (lt x y) (lt y x) (compare x y).
   Proof.
@@ -245,6 +256,7 @@ Module NoPropLevel.
       all: split; [now inversion 1|]. now intros ->.
       all: intro; now constructor.
   Qed.
+  *)
 
   Definition eq_leibniz (x y : t) : eq x y -> x = y := id.
 
@@ -403,7 +415,7 @@ Module UnivExpr.
 
   Definition eq_dec (l1 l2 : t) : {l1 = l2} + {l1 <> l2}.
   Proof.
-    repeat decide equality.
+    repeat (apply nstring_eqdec || decide equality).
   Defined.
 
   Definition eq_leibniz (x y : t) : eq x y -> x = y := id.
@@ -1156,7 +1168,7 @@ Module UnivConstraint.
 
   Lemma eq_dec x y : {eq x y} + {~ eq x y}.
   Proof.
-    unfold eq. repeat decide equality.
+    unfold eq. repeat (apply nstring_eqdec || decide equality).
   Defined.
 
   Definition eq_leibniz (x y : t) : eq x y -> x = y := id.
@@ -1731,7 +1743,7 @@ Definition string_of_level (l : Level.t) : string :=
   match l with
   | Level.lProp => "Prop"
   | Level.lSet => "Set"
-  | Level.Level s => s
+  | Level.Level s => nstring_to_string s
   | Level.Var n => "Var" ++ string_of_nat n
   end.
 
