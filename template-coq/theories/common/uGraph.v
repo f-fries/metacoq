@@ -9,7 +9,6 @@ Arguments Z.add : simpl nomatch.
 Arguments Nat.leb : simpl nomatch.
 Arguments Nat.eqb : simpl nomatch.
 
-About comparison.
 (** variable levels are levels which are Level or Var *)
 Module VariableLevel.
   Inductive t := Level (_ : nstring) | Var (_ : nat).

@@ -39,9 +39,6 @@ Proof. destruct (nstring_eqb_correct x y) as [H1 H2]. destruct (nstring_eqb x y)
     right. intros H3 % H2. congruence.
 Defined.
 
-Local Definition i63_min (x y : int) := 
-    if x < y then x else y.
-
 (* Order = The typical lexical order on strings *)
 Definition nstring_compare '(mk_str xs) '(mk_str ys) : comparison :=
     let len_xs := length xs in
@@ -82,6 +79,7 @@ Axiom nstring_order_trans : forall v x y z,
     -> nstring_order v x z.
 
 Compute nstring_compare (mk_str [| 0 ; 1 ; 2 | 0 |]) (mk_str [| 0 ; 1; 4 | 0 |]).
+
 (* Concatenation *)
 Local Fixpoint copy_from (n : nat) (i k: int) (a b : char_array) :=
             match n with

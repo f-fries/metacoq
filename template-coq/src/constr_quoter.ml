@@ -147,7 +147,7 @@ struct
     | Constr.NATIVEcast -> Lazy.force kNative
 
   let string_of_level s =
-    to_string (Univ.Level.to_string s)
+    Nstring.Quote.nstr (Univ.Level.to_string s)
 
   let quote_level l =
     Tm_util.debug (fun () -> str"quote_level " ++ Level.pr l);

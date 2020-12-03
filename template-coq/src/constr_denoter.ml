@@ -160,7 +160,7 @@ struct
     else if constr_equall h tLevel then
       match args with
       | s :: [] -> debug (fun () -> str "Unquoting level " ++ Printer.pr_constr_env (Global.env ()) evm trm);
-        get_level evm (unquote_string s)
+        get_level evm (Nstring.Reify.nstr s)
       | _ -> bad_term_verb trm "unquote_level"
     else if constr_equall h tLevelVar then
       match args with
@@ -178,7 +178,7 @@ struct
     else if constr_equall h noprop_tLevel then
       match args with
       | s :: [] -> debug (fun () -> str "Unquoting level " ++ Printer.pr_constr_env (Global.env ()) evm trm);
-        get_level evm (unquote_string s)
+        get_level evm (Nstring.Reify.nstr s)
       | _ -> bad_term_verb trm "unquote_noproplevel"
     else if constr_equall h noprop_tLevelVar then
       match args with
