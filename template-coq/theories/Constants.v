@@ -1,5 +1,5 @@
 From MetaCoq.Template Require Import BasicAst uGraph TemplateMonad TemplateMonad.Extractable.
-From MetaCoq.Template Require Import MCNativeIdent.
+From MetaCoq.Template Require Import MCNativeString.
 
 (* Base types *)
 
