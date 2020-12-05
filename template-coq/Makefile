@@ -1,6 +1,7 @@
 SED = `which gsed || which sed`
 
-all: coq template-coq plugin
+all: coq template-coq 
+# plugin
 
 coq: Makefile.coq
 	$(MAKE) -f Makefile.coq
