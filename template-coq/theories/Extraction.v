@@ -3,16 +3,12 @@
     Any extracted code planning to link with the plugin's OCaml reifier
     should use these same directives for consistency.
 *)
-
-(* From MetaCoq Require All. *)
-(*
-
 Require Import MetaCoq.Template.utils MetaCoq.Template.Ast.
-Require Import ExtrOcamlPArray.
 Require Import FSets.
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString ExtrOcamlZInt.
-
+Require Import ExtrOCamlInt63.
+Require Import ExtrOCamlPArray.
 (* Ignore [Decimal.int] before the extraction issue is solved:
    https://github.com/coq/coq/issues/7017. *)
 Extract Inductive Decimal.int => unit [ "(fun _ -> ())" "(fun _ -> ())" ] "(fun _ _ _ -> assert false)".
@@ -40,4 +36,3 @@ Extraction Library Pretty.
 Extraction Library config.
 
 Cd "..".
-*)
