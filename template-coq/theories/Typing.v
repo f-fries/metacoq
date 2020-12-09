@@ -1,11 +1,10 @@
 (* Distributed under the terms of the MIT license.   *)
 
-(*
 From Coq Require Import Bool List Arith Lia ssreflect.
 From Coq Require Import String Wellfounded Relation_Operators.
 
 From MetaCoq.Template Require Import config utils monad_utils Ast AstUtils LiftSubst UnivSubst EnvironmentTyping.
-Import MonadNotation.
+Import MonadNotation EnvironmentTyping.Native.
 
 Local Open Scope string_scope.
 Set Asymmetric Patterns.
@@ -134,7 +133,7 @@ Definition fix_context (m : mfixpoint term) : context :=
 Lemma fix_context_length mfix : #|fix_context mfix| = #|mfix|.
 Proof. unfold fix_context. now rewrite List.rev_length mapi_length. Qed.
 
-Definition tDummy := tVar "".
+Definition tDummy := tVar (make "").
 
 Definition iota_red npar c args brs :=
   (mkApps (snd (List.nth c brs (0, tDummy))) (List.skipn npar args)).
@@ -1686,4 +1685,3 @@ Defined.
 
 Definition wf_ext_wf `{checker_flags} Σ : wf_ext Σ -> wf Σ.1 := fst.
 Hint Immediate wf_ext_wf : core.
-*)

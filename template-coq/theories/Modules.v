@@ -24,7 +24,8 @@ From MetaCoq.Template Require Import
     TemplateMonad
     LiftSubst
     UnivSubst
-    TemplateMonad.
+    Typing
+    TypingWf.
 
 
 (* For the stuff that's shared with PCUIC, export the versions that are used by the TemplateCoq *)
@@ -34,7 +35,7 @@ Module uGraph := uGraph.Native.
 Module Environment := Environment.Native.
 Module EnvironmentTyping := EnvironmentTyping.Native.
 
-(* Provide the other Module for convinience *)
+(* Reexport the other Module for convinience *)
 Module Ast := Ast.
 Module Astutils := AstUtils.
 Module utils := utils.
@@ -43,7 +44,9 @@ Module Pretty := Pretty.
 Module TemplateMonad := TemplateMonad.
 Module LiftSubst := LiftSubst.
 Module UnivSubst := UnivSubst.
-Module TemplateMonad := TemplateMonad.
+Module Typing := Typing.
+Module TypingWf := TypingWf.
+
 
 Module All.
 Export
@@ -61,8 +64,8 @@ Export
     Pretty
     TemplateMonad
     LiftSubst
-    UnivSubst.
-    TemplateMonad
+    UnivSubst
+    Typing.
 End All.
 
 

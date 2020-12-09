@@ -1,6 +1,5 @@
 (* Distributed under the terms of the MIT license.   *)
 
-(*
 From Coq Require Import Bool String List Arith Lia.
 From MetaCoq.Template Require Import config utils Ast AstUtils Induction LiftSubst
      UnivSubst Typing.
@@ -138,7 +137,7 @@ Proof.
   - constructor; auto. solve_all.
   - constructor. solve_all.
     destruct x; simpl in *. repeat split; tas.
-    destruct dbody; simpl in *; congruence.
+    destruct dbody0; simpl in *; congruence.
   - constructor. solve_all.
 Qed.
 
@@ -303,7 +302,7 @@ Proof.
   - destruct t; try reflexivity. discriminate.
   - destruct l; simpl in *; congruence.
   - destruct x; simpl in *; intuition eauto.
-    destruct dbody; simpl in *; try discriminate. destruct Nat.leb; auto.
+    destruct dbody0; simpl in *; try discriminate. destruct Nat.leb; auto.
 Qed.
 
 Lemma declared_inductive_wf {cf:checker_flags} :
@@ -794,4 +793,3 @@ Proof.
   eapply All_Forall, Alli_All; eauto. simpl; intros.
   eapply declared_projection_wf in H0; eauto.
 Qed.
-*)

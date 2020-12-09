@@ -114,9 +114,7 @@ Proof.
 Defined.
 
 Definition eq_kername (k0 k1 : kername) : bool :=
-  let (mp0, i0) := k0 in
-  let (mp1, i1) := k1 in
-  ident_eq i0 i1 && modpath_eq mp0 mp1.
+  if kername_eq_dec k0 k1 then true else false.
 
 (** Identifiers that are allowed to be anonymous (i.e. "_" in concrete syntax). *)
 Inductive name : Set :=
