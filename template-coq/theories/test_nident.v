@@ -1,8 +1,13 @@
 
 
 Add LoadPath "theories" as MetaCoq.Template.
+(*
 From MetaCoq.Template Require Import All Core monad_utils utils.
 From MetaCoq.Template Require Import Pretty.
+*)
+From MetaCoq.Template Require Import Modules.
+Import All Core monad_utils utils.
+
 Check nstring.
 Import MonadNotation.
 Require String.
@@ -90,8 +95,11 @@ MetaCoq Run (tmQuote (fun x : nat => (fun y t => 0%nat) Type) >>= tmPrint).
 MetaCoq Test Quote get_kername.
 MetaCoq Quote Definition q1 := Eval vm_compute in get_kername.
 Print q1.
+
+(* This does not work because TemplateCoq can't quote primitive type right now
 MetaCoq Quote Recursively Definition q3 := get_kername.
 Print q3.
+*)
 
 (* tmUnquote and associated Vernac Commands *)
 MetaCoq Test Unquote q1.
@@ -119,3 +127,4 @@ MetaCoq Run (
 ). (* expected output: TemplateMonad_Monad *)
 
 
+MetaCoq Run (tmQuoteUniverses >>= tmPrint).
