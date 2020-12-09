@@ -13,7 +13,7 @@ Arguments Nat.eqb : simpl nomatch.
 (** variable levels are levels which are Level or Var *)
 Module _uGraph(Id : Ident.Sig) (B : BasicAst.Sig Id) (U : Universes.Sig Id B).
 Import B.
-Import Uk.
+Import U.
 
 Module VariableLevel.
   Inductive t := Level (_ : Id.t) | Var (_ : nat).
@@ -1780,6 +1780,8 @@ End _uGraph.
 Module Type Sig (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
       Include _uGraph I B U.
 End Sig.
+
+Module Native := _uGraph Ident.Native BasicAst.Native Universes.Native.
 
 
 (* If I would restart: *)

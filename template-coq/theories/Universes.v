@@ -1285,9 +1285,6 @@ Definition constraints_of_udecl u :=
   | Polymorphic_ctx ctx => snd (AUContext.repr ctx)
   end.
 
-
-
-
 Definition llt {cf:checker_flags} (x y : Z) : Prop :=
   if prop_sub_type then x < y else 0 <= x /\ x < y.
 
