@@ -1,6 +1,7 @@
 (* Distributed under the terms of the MIT license.   *)
 From Coq Require Import String Bool List.
 From MetaCoq.Template Require Import utils.
+From MetaCoq.Template Require Ident.
 Local Open Scope string_scope.
 
 
@@ -32,11 +33,18 @@ Local Open Scope string_scope.
     - GlobRef.t => global_reference
 *)
 
-Definition ident   := nstring. (* e.g. nat *)
-Definition qualid  := nstring. (* e.g. Datatypes.nat *)
+Module _BasicAst (Ident : Ident.Sig).
 
-Definition string_of_ident := nstring_to_string.
-Definition string_of_qualid := nstring_to_string.
+Ltac decide_eq_id := try unfold eqdec in *; intros; repeat (apply Ident.eqdec || decide equality).
+
+Definition ident   := Ident.t. (* e.g. nat *)
+
+Definition ident_eq := Ident.eq.
+Definition ident_eq_spec := Ident.eq_spec.
+Definition string_of_ident := Ident.print.
+
+Definition qualid  := ident. (* e.g. Datatypes.nat *)
+Definition string_of_qualid := string_of_ident.
 
 
 (** Type of directory paths. Essentially a list of module identifiers. The
@@ -45,6 +53,21 @@ Definition dirpath := list ident.
 
 Definition string_of_dirpath : dirpath -> string
   := String.concat "." ∘ map string_of_ident ∘ rev.
+
+Definition dirpath_eq_dec : eqdec dirpath.
+Proof.
+  decide_eq_id.
+Defined.
+
+Fixpoint list_eq {A} (eq : A -> A -> bool) xs ys := 
+  match xs, ys with
+  | nil, nil => true
+  | x::xs, y::ys => eq x y && list_eq eq xs ys
+  | _, _ => false
+  end.
+
+Definition dirpath_eq : dirpath -> dirpath -> bool := list_eq ident_eq.
+
 
 (** The module part of the kernel name.
     - MPfile is for toplevel libraries, i.e. .vo files
@@ -63,89 +86,10 @@ Fixpoint string_of_modpath (mp : modpath) : string :=
   | MPdot mp id => string_of_modpath mp ++ "." ++ string_of_ident id
   end.
 
-(** The absolute names of objects seen by kernel *)
-Definition kername := modpath × ident.
-
-Definition string_of_kername (kn : kername) :=
-  string_of_modpath kn.1 ++ "." ++ string_of_ident kn.2.
-
-
-(** Identifiers that are allowed to be anonymous (i.e. "_" in concrete syntax). *)
-Inductive name : Set :=
-| nAnon
-| nNamed (_ : ident).
-
-Definition string_of_name (na : name) :=
-  match na with
-  | nAnon => "_"
-  | nNamed n => string_of_ident n
-  end.
-
-(** Designation of a (particular) inductive type. *)
-Record inductive : Set := mkInd { inductive_mind : kername ;
-                                  inductive_ind : nat }.
-Arguments mkInd _%string _%nat.
-
-Definition string_of_inductive (i : inductive) :=
-  string_of_kername (inductive_mind i) ++ "," ++ string_of_nat (inductive_ind i).
-
-Definition projection : Set := inductive * nat (* params *) * nat (* argument *).
-
-(** Kernel declaration references [global_reference] *)
-Inductive global_reference :=
-| VarRef : ident -> global_reference
-| ConstRef : kername -> global_reference
-| IndRef : inductive -> global_reference
-| ConstructRef : inductive -> nat -> global_reference.
-
-
-Definition string_of_gref gr : string :=
-  match gr with
-  | VarRef v => string_of_ident v
-  | ConstRef s => string_of_kername s
-  | IndRef (mkInd s n) =>
-    "Inductive " ++ string_of_kername s ++ " " ++ (string_of_nat n)
-  | ConstructRef (mkInd s n) k =>
-    "Constructor " ++ string_of_kername s ++ " " ++ (string_of_nat n) ++ " " ++ (string_of_nat k)
-  end.
-
-(*
-Definition kername_eq_dec (k k0 : kername) : {k = k0} + {k <> k0}.
+Definition modpath_eq_dec : eqdec modpath.
 Proof.
-  repeat (decide equality; eauto with eq_dec).
+  decide_eq_id.
 Defined.
-Hint Resolve kername_eq_dec : eq_dec.
-
-Definition gref_eq_dec (gr gr' : global_reference) : {gr = gr'} + {~ gr = gr'}.
-Proof.
-  decide equality; eauto with eq_dec.
-  destruct i, i0.
-  decide equality; eauto with eq_dec.
-  destruct i, i0.
-  decide equality; eauto with eq_dec.
-Defined.
-*)
-
-Definition ident_eq := nstring_eqb.
-
-(*
-Lemma ident_eq_spec x y : reflect (x = y) (ident_eq x y).
-Proof.
-  unfold ident_eq. destruct (string_compare_eq x y).
-  destruct string_compare; constructor; auto.
-  intro Heq; specialize (H0 Heq). discriminate.
-  intro Heq; specialize (H0 Heq). discriminate.
-Qed.
-*)
-
-Fixpoint list_eq {A} (eq : A -> A -> bool) xs ys := 
-  match xs, ys with
-  | nil, nil => true
-  | x::xs, y::ys => eq x y && list_eq eq xs ys
-  | _, _ => false
-  end.
-
-Definition dirpath_eq : dirpath -> dirpath -> bool := list_eq ident_eq.
 
 Fixpoint modpath_eq mp1 mp2 :=
   match mp1, mp2 with
@@ -158,18 +102,51 @@ Fixpoint modpath_eq mp1 mp2 :=
   | _, _ => false
   end.
 
+(** The absolute names of objects seen by kernel *)
+Definition kername := modpath × ident.
+
+Definition string_of_kername (kn : kername) :=
+  string_of_modpath kn.1 ++ "." ++ string_of_ident kn.2.
+
+Definition kername_eq_dec : eqdec kername.
+Proof.
+  decide_eq_id.
+Defined.
+
 Definition eq_kername (k0 k1 : kername) : bool :=
   let (mp0, i0) := k0 in
   let (mp1, i1) := k1 in
-  nstring_eqb i0 i1 && modpath_eq mp0 mp1.
+  ident_eq i0 i1 && modpath_eq mp0 mp1.
 
-(*
-Lemma eq_kername_refl kn : eq_kername kn kn.
+(** Identifiers that are allowed to be anonymous (i.e. "_" in concrete syntax). *)
+Inductive name : Set :=
+| nAnon
+| nNamed (_ : ident).
+
+Definition string_of_name (na : name) :=
+  match na with
+  | nAnon => "_"
+  | nNamed n => string_of_ident n
+  end.
+
+Definition name_eq_dec : eqdec name.
 Proof.
-  unfold eq_kername. destruct (kername_eq_dec kn kn); cbnr.
-  contradiction.
-Qed.
-*)
+  decide_eq_id.
+Defined.
+
+
+(** Designation of a (particular) inductive type. *)
+Record inductive : Set := mkInd { inductive_mind : kername ;
+                                  inductive_ind : nat }.
+Arguments mkInd _%string _%nat.
+
+Definition string_of_inductive (i : inductive) :=
+  string_of_kername (inductive_mind i) ++ "," ++ string_of_nat (inductive_ind i).
+
+Definition inductive_eq_dec : eqdec inductive.
+Proof.
+  decide_eq_id.
+Defined.
 
 Definition eq_inductive i i' :=
   let 'mkInd i n := i in
@@ -178,10 +155,52 @@ Definition eq_inductive i i' :=
 
 Definition eq_constant := eq_kername.
 
+Definition projection : Set := inductive * nat (* params *) * nat (* argument *).
+
 Definition eq_projection p p' :=
   let '(ind, pars, arg) := p in
   let '(ind', pars', arg') := p' in
   eq_inductive ind ind' && Nat.eqb pars pars' && Nat.eqb arg arg'.
+
+(** Kernel declaration references [global_reference] *)
+Inductive global_reference :=
+| VarRef : ident -> global_reference
+| ConstRef : kername -> global_reference
+| IndRef : inductive -> global_reference
+| ConstructRef : inductive -> nat -> global_reference.
+
+Definition string_of_gref gr : string :=
+  match gr with
+  | VarRef v => string_of_ident v
+  | ConstRef s => string_of_kername s
+  | IndRef (mkInd s n) =>
+    "Inductive " ++ string_of_kername s ++ " " ++ (string_of_nat n)
+  | ConstructRef (mkInd s n) k =>
+    "Constructor " ++ string_of_kername s ++ " " ++ (string_of_nat n) ++ " " ++ (string_of_nat k)
+  end.
+
+Definition gref_eq_Dec : eqdec global_reference.
+Proof.
+  decide_eq_id.
+Defined.
+
+(*
+Lemma ident_eq_spec x y : reflect (x = y) (ident_eq x y).
+Proof.
+  unfold ident_eq. destruct (string_compare_eq x y).
+  destruct string_compare; constructor; auto.
+  intro Heq; specialize (H0 Heq). discriminate.
+  intro Heq; specialize (H0 Heq). discriminate.
+Qed.
+*)
+
+(*
+Lemma eq_kername_refl kn : eq_kername kn kn.
+Proof.
+  unfold eq_kername. destruct (kername_eq_dec kn kn); cbnr.
+  contradiction.
+Qed.
+*)
 
 (*
 Lemma eq_inductive_refl i : eq_inductive i i.
@@ -367,3 +386,13 @@ Ltac close_All :=
   | H : All2 _ _ _ |- All _ _ =>
     (apply (All2_All_left H) || apply (All2_All_right H)); clear H; simpl
   end.
+End _BasicAst.
+
+Module Native := _BasicAst(Ident.Native).
+Module String := _BasicAst(Ident.String).
+
+Module Type Sig (I : Ident.Sig).
+    Include _BasicAst(I).
+End Sig.
+
+Print Sig.

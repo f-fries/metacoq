@@ -2,8 +2,9 @@
 
 
 Require Import List. Import ListNotations.
-From MetaCoq.Template Require Import utils Environment.
-From MetaCoq.Template Require Export Universes.
+From MetaCoq.Template Require utils Environment Universes BasicAst.
+Import utils Environment.Native.
+Export BasicAst.Native Universes.Native.
 
 (** * AST of Coq kernel terms and kernel data structures
 
@@ -33,7 +34,6 @@ From MetaCoq.Template Require Export Universes.
       The global environment [global_env_ext]: a list of [global_decl] and
     a universe graph [constraints].  *)
 
-From MetaCoq.Template Require Export BasicAst.
 
 Inductive term : Type :=
 | tRel (n : nat)
@@ -181,7 +181,7 @@ Record mutual_inductive_entry := {
   mind_entry_inds      : list one_inductive_entry;
   mind_entry_universes : universes_entry;
   mind_entry_template : bool; (* template polymorphism *)
-  mind_entry_variance  : option (list (option Universes.Variance.t));
+  mind_entry_variance  : option (list (option Universes.Native.Variance.t));
   mind_entry_private   : option bool
   (* Private flag for sealing an inductive definition in an enclosing
      module. Not handled by Template Coq yet. *) }.

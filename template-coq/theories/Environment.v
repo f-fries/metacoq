@@ -1,11 +1,12 @@
 From Coq Require Import Ascii OrderedType Arith Lia.
-From MetaCoq.Template Require Import utils BasicAst.
-From MetaCoq.Template Require Import Universes.
+From MetaCoq.Template Require Import utils.
+From MetaCoq.Template Require Ident BasicAst Universes.
 Import List.ListNotations.
 
 Set Asymmetric Patterns.
 
-Module Type Term.
+Module Type _Term (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
+  Import B U.
 
   Parameter Inline term : Type.
 
@@ -18,11 +19,11 @@ Module Type Term.
   Parameter Inline tProj : projection -> term -> term.
   Parameter Inline mkApps : term -> list term -> term.
 
-End Term.
+End _Term.
 
-Module Environment (T : Term).
+Module _Environment (I: Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B) (T : _Term I B U).
 
-  Import T.
+  Import B U T.
 
   (** ** Declarations *)
 
@@ -149,7 +150,7 @@ Module Environment (T : Term).
     ind_params : context;
     ind_bodies : list one_inductive_body ;
     ind_universes : universes_decl;
-    ind_variance : option (list Universes.Variance.t) }.
+    ind_variance : option (list U.Variance.t) }.
 
   (** See [constant_body] from [declarations.ml] *)
   Record constant_body := {
@@ -431,8 +432,26 @@ Module Environment (T : Term).
     rewrite nth_error_fold_context_eq.
     do 2 f_equal. lia. now rewrite fold_context_length.
   Qed.
-End Environment.
+End _Environment.
 
-Module Type EnvironmentSig (T : Term).
- Include Environment T.
-End EnvironmentSig.
+Module Native.
+      Module Type Term := _Term Ident.Native BasicAst.Native Universes.Native.
+
+      Module Environment (T : Term) := 
+        _Environment Ident.Native BasicAst.Native Universes.Native T. 
+
+      Module Type EnvironmentSig (T : Term).
+        Include Environment T.
+      End EnvironmentSig.
+End Native.
+
+Module String.
+      Module Type Term := _Term Ident.String BasicAst.String Universes.String.
+
+      Module Environment (T : Term) := 
+        _Environment Ident.String BasicAst.String Universes.String T. 
+
+      Module Type EnvironmentSig (T : Term).
+        Include Environment T.
+      End EnvironmentSig.
+End String.

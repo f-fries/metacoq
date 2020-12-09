@@ -1,8 +1,9 @@
 Require Import Nat String BinInt Lia ssrbool.
 Require Import MSetWeakList MSetFacts MSetProperties.
-From MetaCoq.Template Require Import utils config Universes monad_utils wGraph.
+From MetaCoq.Template Require Import utils config monad_utils wGraph.
+From MetaCoq.Template Require Ident BasicAst Universes.
 Import ListNotations.
-Import ConstraintType MonadNotation.
+Import MonadNotation.
 Local Open Scope nat_scope.
 
 Arguments Z.add : simpl nomatch.
@@ -10,12 +11,16 @@ Arguments Nat.leb : simpl nomatch.
 Arguments Nat.eqb : simpl nomatch.
 
 (** variable levels are levels which are Level or Var *)
+Module _uGraph(Id : Ident.Sig) (B : BasicAst.Sig Id) (U : Universes.Sig Id B).
+Import B.
+Import Uk.
+
 Module VariableLevel.
-  Inductive t := Level (_ : nstring) | Var (_ : nat).
+  Inductive t := Level (_ : Id.t) | Var (_ : nat).
   Definition lt : t -> t -> Prop :=
     fun x y => match x, y with
             | Level _, Var _ => True
-            | Level s, Level s' => nstring_order Datatypes.Lt s s'
+            | Level s, Level s' => id_lt s s'
             | Var n, Var n' => n < n'
             | Var _, Level _ => False
             end.
@@ -24,10 +29,10 @@ Module VariableLevel.
     split.
     - intros [s|n] H; cbn in H.
       unfold string_lt in H.
-      pose proof (nstring_compare_eq s s). intuition.
+      pose proof (Id.cmp_eq s s). intuition.
       rewrite H in *. discriminate. intuition.
     - intros [s1|n1] [s2|n2] [s3|n3]; cbn; intuition.
-      eapply nstring_order_trans; eassumption.
+      eapply Id.lt_trans; eassumption.
   Qed.
 
   Definition lt_compat : Proper (Logic.eq ==> Logic.eq ==> iff) lt.
@@ -37,7 +42,7 @@ Module VariableLevel.
   Definition compare : t -> t -> comparison :=
     fun x y => match x, y with
             | Level _, Var _ => Datatypes.Lt
-            | Level s, Level s' => nstring_compare s s'
+            | Level s, Level s' => Id.cmp s s'
             | Var n, Var n' => Nat.compare n n'
             | Var _, Level _ => Datatypes.Gt
             end.
@@ -60,7 +65,7 @@ Module VariableLevel.
 
   Definition eq_dec : forall x y : t, {x = y} + {x <> y}.
     intros [s|n] [s'|n']; try now constructor.
-    destruct (nstring_eqdec s s'); [left|right]; congruence.
+    destruct (Id.eqdec s s'); [left|right]; congruence.
     destruct (PeanoNat.Nat.eq_dec n n'); [left|right]; congruence.
   Defined.
 
@@ -142,6 +147,7 @@ Proof.
   now destruct e. symmetry. apply andb_and.
 Defined.
 
+Import U.ConstraintType.
 (* None -> not satisfiable *)
 (* Some empty -> useless *)
 (* else: singleton or two elements set (l = l' -> {l<=l', l'<=l}) *)
@@ -624,7 +630,7 @@ Proof.
       * intros [[l' [[H1|H1] H2]]|H].
         right. subst a. destruct l'; apply EdgeSet.add_spec; left; tas.
 
-        destruct l'; left; [exists (Level n)|exists (Var n)]; intuition.
+        destruct l'; left; [exists (Level t0)|exists (Var n)]; intuition.
         right. destruct a; tas; apply EdgeSet.add_spec; right; tas.
 Qed.
 
@@ -642,8 +648,8 @@ Proof.
   - apply Hi.
   - cbn. intros l Hl. sq. destruct l. constructor.
     econstructor. 2: constructor.
-    assert (He: EdgeSet.In (edge_of_level (Level n)) (wGraph.E (make_graph uctx))). {
-      apply make_graph_E. left. exists (Level n). intuition. }
+    assert (He: EdgeSet.In (edge_of_level (Level t0)) (wGraph.E (make_graph uctx))). {
+      apply make_graph_E. left. exists (Level t0). intuition. }
     eexists; exact He.
     econstructor. 2: constructor.
     assert (He: EdgeSet.In (edge_of_level (Var n)) (wGraph.E (make_graph uctx))). {
@@ -727,9 +733,9 @@ Section MakeGraph.
     destruct x; cbnr.
     - intros _. now apply proj1 in Hl; cbn in Hl.
     - intro Hs. apply Nat2Pos.id.
-      assert (HH: EdgeSet.In (lSet, 1, vtn (Level n)) (wGraph.E G)). {
+      assert (HH: EdgeSet.In (lSet, 1, vtn (Level t0)) (wGraph.E G)). {
         subst G. apply make_graph_E. left.
-        exists (Level n). intuition. }
+        exists (Level t0). intuition. }
       apply (proj2 Hl) in HH; cbn in HH. lia.
   Qed.
 
@@ -1769,6 +1775,11 @@ Section CheckLeq2.
   Qed.
 End CheckLeq2.
 
+End _uGraph.
+
+Module Type Sig (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
+      Include _uGraph I B U.
+End Sig.
 
 
 (* If I would restart: *)

@@ -1,17 +1,24 @@
 From Coq Require Import Ascii String ZArith Lia.
 From Coq Require Import MSetList MSetFacts MSetProperties.
-From MetaCoq.Template Require Import utils BasicAst config.
+From MetaCoq.Template Require Import utils config.
+From MetaCoq.Template Require Ident BasicAst.
 Import ListNotations.
 
 Local Open Scope Z_scope.
 
-(** * Valuations *)
+Module _Universe (Id : Ident.Sig) (B : BasicAst.Sig Id).
 
+Import B.
+
+Definition id_lt := Ident.lt Id.cmp.
+
+(** * Valuations *)
+  
 (** A valuation is a universe level (nat) given for each
     universe variable (Level.t).
     It is >= for polymorphic universes and > 0 for monomorphic universes. *)
 Record valuation :=
-  { valuation_mono : nstring -> positive ;
+  { valuation_mono : Id.t -> positive ;
     valuation_poly : nat -> nat }.
 
 Class Evaluable (A : Type) := val : valuation -> A -> Z.
@@ -20,7 +27,7 @@ Module Level.
   Inductive t_ : Set :=
   | lProp
   | lSet
-  | Level (_ : nstring)
+  | Level (_ : Id.t)
   | Var (_ : nat) (* these are debruijn indices *).
 
   Definition t := t_.
@@ -65,7 +72,7 @@ Module Level.
     | lSet, lSet => Eq
     | lSet, _ => Lt
     | _, lSet => Gt
-    | Level s1, Level s2 => nstring_compare s1 s2
+    | Level s1, Level s2 => Id.cmp s1 s2
     | Level _, _ => Lt
     | _, Level _ => Gt
     | Var n, Var m => Nat.compare n m
@@ -76,7 +83,7 @@ Module Level.
 
   Definition eq_dec (l1 l2 : t) : {l1 = l2}+{l1 <> l2}.
   Proof.
-    decide equality. apply nstring_eqdec. apply Peano_dec.eq_nat_dec.
+    decide equality. apply Id.eqdec. apply Peano_dec.eq_nat_dec.
   Defined.
 
   Inductive lt_ : t -> t -> Prop :=
@@ -85,7 +92,7 @@ Module Level.
   | ltPropVar n : lt_ lProp (Var n)
   | ltSetLevel s : lt_ lSet (Level s)
   | ltSetVar n : lt_ lSet (Var n)
-  | ltLevelLevel s s' : nstring_order Lt s s' -> lt_ (Level s) (Level s')
+  | ltLevelLevel s s' : id_lt s s' -> lt_ (Level s) (Level s')
   | ltLevelVar s n : lt_ (Level s) (Var n)
   | ltVarVar n n' : Nat.lt n n' -> lt_ (Var n) (Var n').
 
@@ -95,11 +102,11 @@ Module Level.
   Proof.
     constructor.
     - intros [| | |] X; inversion X.
-      eapply nstring_lt_irreflexive; tea.
+      eapply Id.lt_irreflexive; tea.
       eapply Nat.lt_irrefl; tea.
     - intros [| | |] [| | |] [| | |] X1 X2;
         inversion X1; inversion X2; constructor.
-      eapply (nstring_order_trans Lt); tea.
+      eapply Id.lt_trans; tea.
       etransitivity; tea.
   Qed.
 
@@ -136,16 +143,17 @@ Module Level.
   Global Instance eqb_refl : Reflexive eqb.
   Proof.
     intros []; unfold eqb; cbnr.
-    - rewrite (ssreflect.iffRL (nstring_compare_eq n n)). all: auto.
+    - rewrite (ssreflect.iffRL (Id.cmp_eq t0 t0)). all: auto.
     - rewrite Nat.compare_refl. reflexivity.
-  Qed.
+    Qed.
 
   Lemma eqb_spec l l' : reflect (eq l l') (eqb l l').
   Proof.
     destruct l, l'; cbn; try constructor; try reflexivity; try discriminate.
     - apply iff_reflect. unfold eqb; cbn. split.
-      + intros H. inversion H. rewrite (ssreflect.iffRL (nstring_compare_eq n0 n0) eq_refl); reflexivity.
-      + destruct (nstring_compare n n0) eqn:H; try congruence. apply nstring_compare_eq in H.
+      + intros H. inversion H. 
+        rewrite (ssreflect.iffRL (Id.cmp_eq t1 t1) eq_refl); reflexivity.
+      + destruct (Id.cmp t0 t1) eqn:H; try congruence. apply Id.cmp_eq in H.
         congruence.
     - apply iff_reflect. unfold eqb; cbn.
       destruct (Nat.compare_spec n n0); split; intro HH;
@@ -182,7 +190,7 @@ Qed.
 
 (** no prop levels are levels which are Set or Level or Var *)
 Module NoPropLevel.
-  Inductive t_ := lSet |  Level (_ : nstring) | Var (_ : nat).
+  Inductive t_ := lSet |  Level (_ : Id.t) | Var (_ : nat).
 
   Definition t : Set := t_.
 
@@ -199,7 +207,7 @@ Module NoPropLevel.
     | lSet, lSet => Eq
     | lSet, _ => Lt
     | _, lSet => Gt
-    | Level s1, Level s2 => nstring_compare s1 s2
+    | Level s1, Level s2 => Id.cmp s1 s2
     | Level _, _ => Lt
     | _, Level _ => Gt
     | Var n, Var m => Nat.compare n m
@@ -211,13 +219,13 @@ Module NoPropLevel.
 
   Definition eq_dec (l1 l2 : t) : {l1 = l2}+{l1 <> l2}.
   Proof.
-    decide equality. apply nstring_eqdec. apply Peano_dec.eq_nat_dec.
+    decide equality. apply Id.eqdec. apply Peano_dec.eq_nat_dec.
   Defined.
 
   Inductive lt_ : t -> t -> Prop :=
   | ltSetLevel s : lt_ lSet (Level s)
   | ltSetVar n : lt_ lSet (Var n)
-  | ltLevelLevel s s' : nstring_order Lt s s' -> lt_ (Level s) (Level s')
+  | ltLevelLevel s s' : id_lt s s' -> lt_ (Level s) (Level s')
   | ltLevelVar s n : lt_ (Level s) (Var n)
   | ltVarVar n n' : Nat.lt n n' -> lt_ (Var n) (Var n').
 
@@ -226,11 +234,11 @@ Module NoPropLevel.
   Global Instance lt_strorder : StrictOrder lt.
     split.
     - intros [| |] X; inversion X.
-      eapply nstring_lt_irreflexive; tea.
+      eapply Id.lt_irreflexive; tea.
       eapply Nat.lt_irrefl; tea.
     - intros [| |] [| |] [| |] X1 X2;
         inversion X1; inversion X2; constructor.
-      eapply nstring_order_trans; tea.
+      eapply Id.lt_trans; tea.
       etransitivity; tea.
   Qed.
 
@@ -415,7 +423,7 @@ Module UnivExpr.
 
   Definition eq_dec (l1 l2 : t) : {l1 = l2} + {l1 <> l2}.
   Proof.
-    repeat (apply nstring_eqdec || decide equality).
+    repeat (apply Id.eqdec || decide equality).
   Defined.
 
   Definition eq_leibniz (x y : t) : eq x y -> x = y := id.
@@ -1168,7 +1176,7 @@ Module UnivConstraint.
 
   Lemma eq_dec x y : {eq x y} + {~ eq x y}.
   Proof.
-    unfold eq. repeat (apply nstring_eqdec || decide equality).
+    unfold eq. repeat (apply Id.eqdec || decide equality).
   Defined.
 
   Definition eq_leibniz (x y : t) : eq x y -> x = y := id.
@@ -1743,7 +1751,7 @@ Definition string_of_level (l : Level.t) : string :=
   match l with
   | Level.lProp => "Prop"
   | Level.lSet => "Set"
-  | Level.Level s => nstring_to_string s
+  | Level.Level s => Id.print s
   | Level.Var n => "Var" ++ string_of_nat n
   end.
 
@@ -1766,7 +1774,7 @@ Inductive universes_entry :=
 
 Definition universes_entry_of_decl (u : universes_decl) : universes_entry :=
   match u with
-  | Polymorphic_ctx ctx => Polymorphic_entry (fst ctx) (Universes.AUContext.repr ctx)
+  | Polymorphic_ctx ctx => Polymorphic_entry (fst ctx) (AUContext.repr ctx)
   | Monomorphic_ctx ctx => Monomorphic_entry ctx
   end.
 
@@ -1954,3 +1962,12 @@ Section no_prop_leq_type.
   Qed.
 
 End no_prop_leq_type.
+
+End _Universe.
+
+Module Type Sig (I : Ident.Sig) (B : BasicAst.Sig I).
+      Include _Universe I B.
+End Sig.
+
+Module Native := _Universe Ident.Native BasicAst.Native.
+Module String := _Universe Ident.String BasicAst.String.
