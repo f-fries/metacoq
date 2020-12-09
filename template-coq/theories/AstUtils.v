@@ -84,55 +84,51 @@ Fixpoint remove_arity (n : nat) (t : term) : term :=
           end
   end.
 
-Fixpoint lookup_mind_decl (id : kername) (decls : global_env)
- := match decls with
-    | nil => None
-    | (kn, InductiveDecl d) :: tl =>
-      if eq_kername kn id then Some d else lookup_mind_decl id tl
-    | _ :: tl => lookup_mind_decl id tl
-    end.
-
-Definition universes_entry_of_decl (u : universes_decl) : universes_entry :=
+(* TODO: Remove
+ * This is also in Universes 
+  
+  Definition universes_entry_of_decl (u : universes_decl) : universes_entry :=
   match u with
   | Polymorphic_ctx ctx => Polymorphic_entry (fst ctx) (AUContext.repr ctx)
   | Monomorphic_ctx ctx => Monomorphic_entry ctx
   end.
+*)
 
 (* TODO factorize in Environment *)
 (* was mind_decl_to_entry *)
 Definition mind_body_to_entry (decl : mutual_inductive_body)
-  : mutual_inductive_entry.
+: mutual_inductive_entry.
 Proof.
-  refine {| mind_entry_record := None; (* not a record *)
-            mind_entry_finite := Finite; (* inductive *)
-            mind_entry_params := _ (* Should be ind_params, but translations are broken: for Simon decl.(ind_params) *);
-            mind_entry_inds := _;
-            mind_entry_universes := universes_entry_of_decl decl.(ind_universes);
-            mind_entry_template := false;
-            mind_entry_variance := option_map (map Some) decl.(ind_variance);
-            mind_entry_private := None |}.
-  - (* FIXME: this is wrong, the info should be in ind_params *)
-   refine (match List.hd_error decl.(ind_bodies) with
-  | Some i0 => List.rev _
-  | None => nil (* assert false: at least one inductive in a mutual block *)
-  end).
-  pose (typ := decompose_prod i0.(ind_type)).
+refine {| mind_entry_record := None; (* not a record *)
+          mind_entry_finite := Finite; (* inductive *)
+          mind_entry_params := _ (* Should be ind_params, but translations are broken: for Simon decl.(ind_params) *);
+          mind_entry_inds := _;
+          mind_entry_universes := universes_entry_of_decl decl.(ind_universes);
+          mind_entry_template := false;
+          mind_entry_variance := option_map (map Some) decl.(ind_variance);
+          mind_entry_private := None |}.
+- (* FIXME: this is wrong, the info should be in ind_params *)
+ refine (match List.hd_error decl.(ind_bodies) with
+| Some i0 => List.rev _
+| None => nil (* assert false: at least one inductive in a mutual block *)
+end).
+pose (typ := decompose_prod i0.(ind_type)).
 destruct typ as [[names types] _].
 apply (List.firstn decl.(ind_npars)) in names.
 apply (List.firstn decl.(ind_npars)) in types.
-  refine (map (fun '(x, ty) => vass x ty) (combine names types)).
-  - refine (List.map _ decl.(ind_bodies)).
-    intros [].
-    refine {| mind_entry_typename := ind_name;
-              mind_entry_arity := remove_arity decl.(ind_npars) ind_type;
-              mind_entry_consnames := _;
-              mind_entry_lc := _;
-            |}.
-    refine (List.map (fun x => fst (fst x)) ind_ctors).
-    refine (List.map (fun x => remove_arity decl.(ind_npars)
-                                                (snd (fst x))) ind_ctors).
+refine (map (fun '(x, ty) => vass x ty) (combine names types)).
+- refine (List.map _ decl.(ind_bodies)).
+  intros [].
+  refine {| mind_entry_typename := ind_name;
+            mind_entry_arity := remove_arity decl.(ind_npars) ind_type;
+            mind_entry_consnames := _;
+            mind_entry_lc := _;
+          |}.
+  refine (List.map (fun x => fst (fst x)) ind_ctors).
+  refine (List.map (fun x => remove_arity decl.(ind_npars)
+                                              (snd (fst x))) ind_ctors).
 Defined.
-
+  
 Fixpoint decompose_prod_assum (Γ : context) (t : term) : context * term :=
   match t with
   | tProd n A B => decompose_prod_assum (Γ ,, vass n A) B

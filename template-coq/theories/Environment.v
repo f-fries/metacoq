@@ -5,8 +5,11 @@ Import List.ListNotations.
 
 Set Asymmetric Patterns.
 
-Module Type _Term (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
-  Import B U.
+Module _Environment (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
+
+Import B U.
+
+Module Type Term.
 
   Parameter Inline term : Type.
 
@@ -19,11 +22,11 @@ Module Type _Term (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
   Parameter Inline tProj : projection -> term -> term.
   Parameter Inline mkApps : term -> list term -> term.
 
-End _Term.
+End Term.
 
-Module _Environment (I: Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B) (T : _Term I B U).
+Module Environment (T : Term).
 
-  Import B U T.
+  Import T.
 
   (** ** Declarations *)
 
@@ -122,6 +125,71 @@ Module _Environment (I: Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B) 
 
   (** *** Environments *)
 
+  (** ** Entries
+
+    The kernel accepts these inputs and typechecks them to produce
+    declarations. Reflects [kernel/entries.mli].
+  *)
+
+  (** *** Constant and axiom entries *)
+
+  Record parameter_entry := {
+    parameter_entry_type      : term;
+    parameter_entry_universes : universes_entry }.
+
+  Record definition_entry := {
+    definition_entry_type      : option term;
+    definition_entry_body      : term;
+    definition_entry_universes : universes_entry;
+    definition_entry_opaque    : bool }.
+
+
+  Inductive constant_entry :=
+  | ParameterEntry  (p : parameter_entry)
+  | DefinitionEntry (def : definition_entry).
+
+  (** *** Inductive entries *)
+
+  (** This is the representation of mutual inductives.
+      nearly copied from [kernel/entries.mli]
+
+    Assume the following definition in concrete syntax:
+
+  [[
+    Inductive I1 (x1:X1) ... (xn:Xn) : A1 := c11 : T11 | ... | c1n1 : T1n1
+    ...
+    with      Ip (x1:X1) ... (xn:Xn) : Ap := cp1 : Tp1  ... | cpnp : Tpnp.
+  ]]
+
+    then, in [i]th block, [mind_entry_params] is [xn:Xn;...;x1:X1];
+    [mind_entry_arity] is [Ai], defined in context [x1:X1;...;xn:Xn];
+    [mind_entry_lc] is [Ti1;...;Tini], defined in context
+    [A'1;...;A'p;x1:X1;...;xn:Xn] where [A'i] is [Ai] generalized over
+    [x1:X1;...;xn:Xn].
+  *)
+
+  Record one_inductive_entry := {
+    mind_entry_typename : ident;
+    mind_entry_arity : term;
+    mind_entry_consnames : list ident;
+    mind_entry_lc : list term (* constructor list *) }.
+
+  Record mutual_inductive_entry := {
+    mind_entry_record    : option (option ident);
+    (* Is this mutual inductive defined as a record?
+       If so, is it primitive, using binder name [ident]
+       for the record in primitive projections ? *)
+    mind_entry_finite    : recursivity_kind;
+    mind_entry_params    : context;
+    mind_entry_inds      : list one_inductive_entry;
+    mind_entry_universes : U.universes_entry;
+    mind_entry_template : bool; (* template polymorphism *)
+    mind_entry_variance  : option (list (option U.Variance.t));
+    mind_entry_private   : option bool
+    (* Private flag for sealing an inductive definition in an enclosing
+       module. Not handled by Template Coq yet. *) }.
+      
+  (** *** Declarations *)
   (** See [one_inductive_body] from [declarations.ml]. *)
   Record one_inductive_body := {
     ind_name : ident;
@@ -381,6 +449,14 @@ Module _Environment (I: Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B) 
       else lookup_env tl kn
     end.
 
+  Fixpoint lookup_mind_decl (id : kername) (decls : global_env)
+  := match decls with
+     | nil => None
+     | (kn, InductiveDecl d) :: tl =>
+       if eq_kername kn id then Some d else lookup_mind_decl id tl
+     | _ :: tl => lookup_mind_decl id tl
+     end.
+
   Lemma context_assumptions_fold Γ f : context_assumptions (fold_context f Γ) = context_assumptions Γ.
   Proof.
     rewrite fold_context_alt.
@@ -432,26 +508,14 @@ Module _Environment (I: Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B) 
     rewrite nth_error_fold_context_eq.
     do 2 f_equal. lia. now rewrite fold_context_length.
   Qed.
+End Environment.
+
 End _Environment.
 
-Module Native.
-      Module Type Term := _Term Ident.Native BasicAst.Native Universes.Native.
+Module Type Sig (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
+      Include _Environment I B U.
+End Sig.
 
-      Module Environment (T : Term) := 
-        _Environment Ident.Native BasicAst.Native Universes.Native T. 
+Module Native := _Environment Ident.Native BasicAst.Native Universes.Native.
 
-      Module Type EnvironmentSig (T : Term).
-        Include Environment T.
-      End EnvironmentSig.
-End Native.
-
-Module String.
-      Module Type Term := _Term Ident.String BasicAst.String Universes.String.
-
-      Module Environment (T : Term) := 
-        _Environment Ident.String BasicAst.String Universes.String T. 
-
-      Module Type EnvironmentSig (T : Term).
-        Include Environment T.
-      End EnvironmentSig.
-End String.
+Module String := _Environment Ident.String BasicAst.String Universes.String.
