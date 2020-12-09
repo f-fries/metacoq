@@ -392,5 +392,3 @@ Module String := _BasicAst(Ident.String).
 Module Type Sig (I : Ident.Sig).
     Include _BasicAst(I).
 End Sig.
-
-Print Sig.

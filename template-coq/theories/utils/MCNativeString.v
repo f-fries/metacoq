@@ -78,7 +78,7 @@ Axiom nstring_order_trans : forall v x y z,
     -> nstring_order v y z
     -> nstring_order v x z.
 
-Compute nstring_compare (mk_str [| 0 ; 1 ; 2 | 0 |]) (mk_str [| 0 ; 1; 4 | 0 |]).
+(* Compute nstring_compare (mk_str [| 0 ; 1 ; 2 | 0 |]) (mk_str [| 0 ; 1; 4 | 0 |]). *)
 
 (* Concatenation *)
 Local Fixpoint copy_from (n : nat) (i k: int) (a b : char_array) :=
@@ -100,13 +100,13 @@ Arguments nstr_concat _%nstr _%nstr.
 Notation "a ++ b" := (nstr_concat a b) (right associativity, at level 60) : nstring_scope .
 
 Definition slice '(mk_str A) k := 
-    let sz := if length A <= k then length A - 1 else k in
+    let sz := if length A <=? k then length A - 1 else k in
     let B := PArray.make sz 0 in
     mk_str (copy_from (i63_to_nat sz) 0 0 A B).
 Arguments slice _%nstr _%int63_scope.
 
-Eval vm_compute in (mk_str [| 0; 1; 2; 3 | 0|] ++ mk_str [| 4; 5; 6 | 0 |])%nstr.
-Eval vm_compute in slice (mk_str [| 0; 1; 2; 3; 4; 5  | 0 |]) 3.
+(* Eval vm_compute in (mk_str [| 0; 1; 2; 3 | 0|] ++ mk_str [| 4; 5; 6 | 0 |])%nstr. *)
+(* Eval vm_compute in slice (mk_str [| 0; 1; 2; 3; 4; 5  | 0 |]) 3. *)
 
 (* Conversions from/to byte lists. This can/will be used to define string notations *)
 Definition to_byte_list '(mk_str a) :=
@@ -131,8 +131,9 @@ Definition from_byte_list (xs : list byte) :=
         | cons x xs => go (i + 1) xs (acc.[i <- i63_from_byte x])
         end) 0 xs arr).
 
-Eval vm_compute in from_byte_list (cons x01 (cons x02 (cons x03 nil))).
+(* Eval vm_compute in from_byte_list (cons x01 (cons x02 (cons x03 nil))). *)
 
+(* Enable string notations here *)
 (* String Notation nstring from_byte_list to_byte_list : nstring_scope. *)
 
 (* This can be used to quickly define nstrings while string notatiosn dont work *)
@@ -165,11 +166,11 @@ Local Definition mk_digit x : int := x + 48.
 Local Fixpoint highest_nonzero_pos (n : nat) (m x : int) : nat :=
     match n with
     | 0 => 0
-    | S k => if m <= x then highest_nonzero_pos k (m * 10) x else S (max_pos - n)
+    | S k => if m <=? x then highest_nonzero_pos k (m * 10) x else S (max_pos - n)
     end.
 
-Compute highest_nonzero_pos max_pos 10 0.
-Compute highest_nonzero_pos max_pos 10 1444.
+(* Compute highest_nonzero_pos max_pos 10 0. *)
+(* Compute highest_nonzero_pos max_pos 10 1444. *)
 
 Definition i63_to_nstring x := 
     let len := highest_nonzero_pos max_pos 10 x in
@@ -178,11 +179,11 @@ Definition i63_to_nstring x :=
         match n with
         | 0 => arr
         | S n => 
-            let d := mk_digit (x \% 10) in 
+            let d := mk_digit (x mod 10) in 
             go n (i - 1) (x / 10) arr.[i <- d]
         end) len (length arr - 1) x arr).
 Arguments i63_to_nstring _%int63_scope.
 
 Definition nat_to_nstring n := i63_to_nstring (nat_to_i63 n).
 
-Compute readable (i63_to_nstring 9876543).
+(* Compute readable (i63_to_nstring 9876543). *)

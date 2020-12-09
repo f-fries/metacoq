@@ -96,9 +96,6 @@ Section print_term.
 
   Close Scope nstring_scope.
 
-  Check combine.
-  Check ind_ctors.
-
   Fixpoint print_term (Γ : context) (top : bool) (t : term) {struct t} :=
   match t with
   | tRel n =>
