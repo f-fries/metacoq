@@ -1,9 +1,14 @@
 From Coq Require Import Ascii String OrderedType.
-From MetaCoq.Template Require Import config utils BasicAst AstUtils.
-From MetaCoq.Template Require Import Universes Environment.
+From MetaCoq.Template Require Import config utils. (* AstUtils *)
+From MetaCoq.Template Require BasicAst Universes Environment.
 Import List.ListNotations.
 
 Set Asymmetric Patterns.
+
+Module _EnvironmentTyping (I : Ident.Sig) (B : BasicAst.Sig I) 
+  (U : Universes.Sig I B) (_Env : Environment.Sig I B U).
+
+Import U B _Env.
 
 Module Lookup (T : Term) (E : EnvironmentSig T).
 
@@ -929,3 +934,19 @@ Module DeclarationTyping (T : Term) (E : EnvironmentSig T)
   End wf_local_size.
 
 End DeclarationTyping.
+
+End _EnvironmentTyping.
+
+Module Type Sig (I : Ident.Sig) (B : BasicAst.Sig I) 
+  (U : Universes.Sig I B) (_E : Environment.Sig I B U).
+ 
+  Include _EnvironmentTyping I B U _E.
+  
+End Sig.
+
+Module Native := 
+  _EnvironmentTyping Ident.Native BasicAst.Native Universes.Native Environment.Native.
+
+  
+Module String :=
+  _EnvironmentTyping Ident.String BasicAst.String Universes.String Environment.String.

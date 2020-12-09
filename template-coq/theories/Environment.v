@@ -510,6 +510,10 @@ Module Environment (T : Term).
   Qed.
 End Environment.
 
+Module Type EnvironmentSig (T : Term).
+      Include Environment T.
+End EnvironmentSig.
+
 End _Environment.
 
 Module Type Sig (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
