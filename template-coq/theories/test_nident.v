@@ -5,7 +5,7 @@ Add LoadPath "theories" as MetaCoq.Template.
 From MetaCoq.Template Require Import All Core monad_utils utils.
 From MetaCoq.Template Require Import Pretty.
 *)
-From MetaCoq.Template Require Import Modules.
+From MetaCoq.Template Require Import Modules Loader.
 Import All Core monad_utils utils.
 
 Check nstring.
@@ -20,7 +20,6 @@ Declare ML Module "template_coq".
 
 MetaCoq nident a := foobar.
 Compute a. (* mk_str [| some_array |] *)
-Compute (readable a). (* expected: "foobar" *)
 
 Local Definition y := 0 + 1 * 2.
 Local Definition quote_nstr := make "nstring"%nstr.
@@ -127,4 +126,4 @@ MetaCoq Run (
 ). (* expected output: TemplateMonad_Monad *)
 
 
-MetaCoq Run (tmQuoteUniverses >>= tmPrint).
+Time MetaCoq Run (tmQuoteUniverses >>= tmPrint).
