@@ -4,7 +4,7 @@
 *   From MetaCoq.Template Require Import A B C.
 *
 * Now:
-*   From MetaCoq.Template Require Modules.
+*   From MetaCoq.Template Require Import Modules.
 *   Import A B C.
 *)
 
@@ -46,8 +46,8 @@ Module LiftSubst := LiftSubst.
 Module UnivSubst := UnivSubst.
 Module Typing := Typing.
 Module TypingWf := TypingWf.
-
-
+Module Induction := Induction.
+    
 Module All.
 Export
     Ident

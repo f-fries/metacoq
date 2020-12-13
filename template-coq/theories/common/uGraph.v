@@ -1782,6 +1782,7 @@ Module Type Sig (I : Ident.Sig) (B : BasicAst.Sig I) (U : Universes.Sig I B).
 End Sig.
 
 Module Native := _uGraph Ident.Native BasicAst.Native Universes.Native.
+Module String := _uGraph Ident.String BasicAst.String Universes.String.
 
 
 (* If I would restart: *)
